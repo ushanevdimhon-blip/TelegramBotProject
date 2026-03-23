@@ -2,9 +2,14 @@ import asyncio
 from aiogram import Bot, Dispatcher, html
 from aiogram.filters import CommandStart
 from aiogram.types import Message
-from config import BOT_TOKEN
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiohttp import BasicAuth
+from config import BOT_TOKEN, PROXY_IP, PROXY_PORT, PROXY_LOGIN, PROXY_PASSWORD
 
-bot = Bot(token=BOT_TOKEN)
+
+auth = BasicAuth(login=PROXY_LOGIN, password=PROXY_PASSWORD)
+session = AiohttpSession(proxy=(f"socks5://{PROXY_IP}:{PROXY_PORT}", auth))
+bot = Bot(token=BOT_TOKEN, session=session)
 dp = Dispatcher()
 
 @dp.message(CommandStart())
