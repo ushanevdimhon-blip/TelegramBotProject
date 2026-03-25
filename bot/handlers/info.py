@@ -5,7 +5,7 @@ from aiogram.filters import Command
 router = Router()
 
 @router.message(Command("info"))
-async def c_info(message: Message):
+async def cmd_info(message: Message):
     """Обработчик команды /info"""
     #TODO: Расширить описание функционала бота
     await message.answer(
