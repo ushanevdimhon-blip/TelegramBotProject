@@ -12,6 +12,8 @@ PROXY_PASSWORD = os.getenv("PROXY_PASSWORD")
 PROXY_IP = os.getenv("PROXY_IP")
 PROXY_PORT = os.getenv("PROXY_PORT")
 
+
+START_MESSAGE_EFFECT = os.getenv('START_MESSAGE_EFFECT', '5046509860389126442')
 # Проверка, что ключи загружены
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден в .env файле")
