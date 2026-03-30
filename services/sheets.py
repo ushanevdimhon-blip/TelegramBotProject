@@ -91,7 +91,7 @@ class SheetsService:
         else:
             return 1
 
-    def add_submission(self, telegram_id: int, file_link: str) -> bool:
+    def add_submission(self, telegram_id: int) -> bool:
         """Добавить submission по Telegram ID"""
         try:
             worksheet = self.get_worksheet('Submissions')
@@ -104,7 +104,7 @@ class SheetsService:
             worksheet.append_row([
                 submission_id,
                 telegram_id,
-                file_link,
+                '',
                 'not_solved',
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ])
@@ -132,8 +132,8 @@ class SheetsService:
             logger.error(f"Ошибка получения submission: {e}")
             return None
 
-    def update_submission(self, submission_id: int, new_status: str) -> bool:
-        """Обновить статус submission по ID"""
+    def update_submission(self, submission_id: int, file_link: str='', new_status: str='') -> bool:
+        """Опционально обновить статус и/или file_link submission по ID"""
         try:
             worksheet = self.get_worksheet('Submissions')
             if not worksheet:
@@ -151,6 +151,7 @@ class SheetsService:
                 return False
 
             worksheet.update_cell(row_index, 4, new_status)  # 4 — индекс столбца "Status"
+            worksheet.update_cell(row_index, 3, file_link)  # 3 — индекс столбца "File_link"
             logger.info(f"Статус submission {submission_id} обновлён на '{new_status}'")
             return True
         except Exception as e:
@@ -171,7 +172,7 @@ class SheetsService:
                 review_id,
                 submission_id,
                 reviewer_id,
-                "",
+                '',
                 -1,
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ])
