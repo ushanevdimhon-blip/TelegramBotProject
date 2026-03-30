@@ -91,24 +91,22 @@ class SheetsService:
         else:
             return 1
 
-    def add_submission(self, worksheet: str, telegram_id: int , submission_id: int | None, file_link: str, status='not_solved', time=None) -> bool:
+    def add_submission(self, telegram_id: int, file_link: str, status='not_solved') -> bool:
         """Добавить submission по Telegram ID"""
         try:
-            worksheet = self.get_worksheet(worksheet)
+            worksheet = self.get_worksheet('Submissions')
             if not worksheet:
                 return False
 
-            submission_id = self._generate_id(worksheet) if submission_id is None else submission_id
+            submission_id = self._generate_id(worksheet)
 
             from datetime import datetime
-
-            time = datetime.now().strftime('%Y-%m-%d %H:%M:%S') if time is None else time
             worksheet.append_row([
                 submission_id,
                 telegram_id,
                 file_link,
                 status,
-                time
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ])
             logger.info(f"submission {submission_id} добавлена")
             return True
@@ -116,47 +114,47 @@ class SheetsService:
             logger.error(f"Ошибка добавления submission: {e}")
             return False
 
-    def get_submission(self, worksheet_name: str='Not_Solved_Submissions') -> dict | None:
-        """Получить submission из очереди указанного листа"""
+    def get_submission(self, submission_id=None) -> dict | None:
+        """Получить нерешенный submission в порядке очереди, либо submission с любым статусом по id"""
         try:
-            worksheet = self.get_worksheet(worksheet_name)
+            worksheet = self.get_worksheet('Submissions')
             if not worksheet:
                 return None
             all_records = worksheet.get_all_records()
-            return all_records[0] if all_records else None
+            if submission_id:
+                for record in all_records:
+                    if int(record.get('ID', 0)) == submission_id:
+                        return record
+            for record in all_records:
+                if record.get('Status') == 'not_solved':
+                    return record
         except Exception as e:
             logger.error(f"Ошибка получения submission: {e}")
             return None
 
-    def update_submission(self, old_worksheet_name, new_worksheet_name, record: dict, new_status: str) -> bool:
-        """обновить статус submission и переместить в соответствующий статусу лист"""
+    def update_submission(self, submission_id: int, status: str) -> bool:
+        """Обновить статус submission по ID"""
         try:
-            old_worksheet = self.get_worksheet(old_worksheet_name)
-            cell = old_worksheet.find(str(record['ID']))
-
-            if cell:
-                #обновляем ячейку по ряду и колонке
-                old_worksheet.update_cell(cell.row, 4, new_status)
-                record['Status'] = new_status
-                #проверяем соответствие листа и статуса
-                if new_worksheet_name == 'In_Progress_Submissions' and record['Status'] == 'in_progress':
-                    #добавляем строку в новый лист
-                    self.add_submission(new_worksheet_name, record['Student_ID'],
-                                        record['ID'], record['File_link'], record['Status'], record['Created_at'])
-                    #удаляем строку из прошлого листа
-                    old_worksheet.delete_rows(cell.row)
-                elif new_worksheet_name == 'Done_Submissions' and record['Status'] == 'done':
-                    # добавляем строку в новый лист
-                    self.add_submission(new_worksheet_name, record['Student_ID'],
-                                        record['ID'], record['File_link'], record['Status'], record['Created_at'])
-                    # удаляем строку из прошлого листа
-                    old_worksheet.delete_rows(cell.row)
-                return True
-            else:
-                print(f"Submission ID {record['ID']} not found.")
+            worksheet = self.get_worksheet('Submissions')
+            if not worksheet:
                 return False
+
+            all_records = worksheet.get_all_records()
+            row_index = None
+            for i, record in enumerate(all_records):
+                if int(record.get('ID', 0)) == submission_id:
+                    row_index = i + 2
+                    break
+
+            if row_index is None:
+                logger.warning(f"Submission с ID {submission_id} не найдена")
+                return False
+
+            worksheet.update_cell(row_index, 4, status)  # 4 — индекс столбца "Status"
+            logger.info(f"Статус submission {submission_id} обновлён на '{status}'")
+            return True
         except Exception as e:
-            print(f"Error updating submission {record['ID']}: {e}")
+            logger.error(f"Ошибка обновления submission: {e}")
             return False
 
     # TODO: рефакторинг, добавить методы add/get и update для reviews
