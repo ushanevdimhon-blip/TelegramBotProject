@@ -80,7 +80,7 @@ class SheetsService:
     @staticmethod
     def _generate_id(worksheet) -> int:
         """
-        Приватный метод для генерации нового уникального ID.
+        метод для генерации нового уникального ID.
         Берёт максимальное значение ID из первого столбца и прибавляет 1.
         Если записей ещё нет — возвращает 1.
         """
@@ -91,7 +91,7 @@ class SheetsService:
         else:
             return 1
 
-    def add_submission(self, telegram_id: int, file_link: str, status='not_solved') -> bool:
+    def add_submission(self, telegram_id: int, file_link: str) -> bool:
         """Добавить submission по Telegram ID"""
         try:
             worksheet = self.get_worksheet('Submissions')
@@ -105,7 +105,7 @@ class SheetsService:
                 submission_id,
                 telegram_id,
                 file_link,
-                status,
+                'not_solved',
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ])
             logger.info(f"submission {submission_id} добавлена")
@@ -132,7 +132,7 @@ class SheetsService:
             logger.error(f"Ошибка получения submission: {e}")
             return None
 
-    def update_submission(self, submission_id: int, status: str) -> bool:
+    def update_submission(self, submission_id: int, new_status: str) -> bool:
         """Обновить статус submission по ID"""
         try:
             worksheet = self.get_worksheet('Submissions')
@@ -147,24 +147,88 @@ class SheetsService:
                     break
 
             if row_index is None:
-                logger.warning(f"Submission с ID {submission_id} не найдена")
+                logger.error(f"Submission с ID {submission_id} не найдена")
                 return False
 
-            worksheet.update_cell(row_index, 4, status)  # 4 — индекс столбца "Status"
-            logger.info(f"Статус submission {submission_id} обновлён на '{status}'")
+            worksheet.update_cell(row_index, 4, new_status)  # 4 — индекс столбца "Status"
+            logger.info(f"Статус submission {submission_id} обновлён на '{new_status}'")
             return True
         except Exception as e:
             logger.error(f"Ошибка обновления submission: {e}")
             return False
 
-    # TODO: рефакторинг, добавить методы add/get и update для reviews
+    def add_review(self, submission_id: int, reviewer_id: int) -> bool:
+        """Добавить review по индексу submission и телеграм id проверяющего"""
+        try:
+            worksheet = self.get_worksheet('Reviews')
+            if not worksheet:
+                return False
+
+            review_id = self._generate_id(worksheet)
+
+            from datetime import datetime
+            worksheet.append_row([
+                review_id,
+                submission_id,
+                reviewer_id,
+                "",
+                -1,
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            ])
+            return True
+        except Exception as e:
+            logger.error(f"ошибка добавления review: {e}")
+            return False
+
+    def get_review(self, review_id: int) -> dict | None:
+        """Получить review по его id"""
+        try:
+            worksheet = self.get_worksheet('Reviews')
+            if not worksheet:
+                return None
+
+            all_records = worksheet.get_all_records()
+            for record in all_records:
+                if int(record.get('ID', 0)) == review_id:
+                    return record
+        except Exception as e:
+            logger.error(f"Ошибка получения review: {e}")
+
+    def update_review(self, review_id: int, feedback: str=None, score: int=-1) -> bool:
+        """Обновить либо feedback, либо score, либо и то и то"""
+        try:
+            worksheet = self.get_worksheet('Reviews')
+            if not worksheet:
+                return False
+
+            all_records = worksheet.get_all_records()
+            row_index = None
+            for i, record in enumerate(all_records):
+                if int(record.get('ID', 0)) == review_id:
+                    row_index = i + 2
+                    break
+
+            if row_index is None:
+                logger.error(f"Review с ID {review_id} не найдена")
+                return False
+
+            worksheet.update_cell(row_index, 4, feedback)  # 4 — индекс столбца "Feedback"
+            worksheet.update_cell(row_index, 5, score)  # 5 — индекс столбца "Score"
+            logger.info(f"Feedback review с id={review_id} обновлён")
+            logger.info(f"Score review с id={review_id} обновлён")
+            return True
+
+        except Exception as e:
+            logger.error(f"Ошибка обновления review: {e}")
+            return False
+
 
 
 
 _sheets_service = None
 
 def get_sheets_service() -> SheetsService | None:
-    """Получить экземпляр сервиса (singleton)"""
+    """Получить экземпляр сервиса"""
     global _sheets_service
 
     if _sheets_service is None:
