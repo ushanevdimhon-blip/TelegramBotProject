@@ -133,7 +133,10 @@ class SheetsService:
             return None
 
     def update_submission(self, submission_id: int, file_link: str='', new_status: str='') -> bool:
-        """Опционально обновить статус и/или file_link submission по ID"""
+        """
+        Опционально обновить статус и/или file_link submission по ID.
+        Для обновления чего-то одного необходимо явно указать что именно(file_link=...).
+        """
         try:
             worksheet = self.get_worksheet('Submissions')
             if not worksheet:
@@ -150,9 +153,16 @@ class SheetsService:
                 logger.error(f"Submission с ID {submission_id} не найдена")
                 return False
 
-            worksheet.update_cell(row_index, 4, new_status)  # 4 — индекс столбца "Status"
-            worksheet.update_cell(row_index, 3, file_link)  # 3 — индекс столбца "File_link"
-            logger.info(f"Статус submission {submission_id} обновлён на '{new_status}'")
+            if new_status != '' and file_link != '':
+                worksheet.update_cell(row_index, 4, new_status)  # 4 — индекс столбца "Status"
+                worksheet.update_cell(row_index, 3, file_link)  # 3 — индекс столбца "File_link"
+                logger.info(f"Status and File_link submission {submission_id} обновлёны")
+            elif new_status != '':
+                worksheet.update_cell(row_index, 4, new_status)
+                logger.info(f"Status submission {submission_id} обновлён")
+            elif file_link != '':
+                worksheet.update_cell(row_index, 3, file_link)
+                logger.info(f"Feedback submission {submission_id} обновлён")
             return True
         except Exception as e:
             logger.error(f"Ошибка обновления submission: {e}")
@@ -195,8 +205,11 @@ class SheetsService:
         except Exception as e:
             logger.error(f"Ошибка получения review: {e}")
 
-    def update_review(self, review_id: int, feedback: str=None, score: int=-1) -> bool:
-        """Обновить либо feedback, либо score, либо и то и то"""
+    def update_review(self, review_id: int, feedback: str='', score: int=-1) -> bool:
+        """
+        Обновить либо feedback, либо score, либо и то и то.
+        Для обновления чего-то одного необходимо явно указать что именно(feedback=...).
+        """
         try:
             worksheet = self.get_worksheet('Reviews')
             if not worksheet:
@@ -213,10 +226,16 @@ class SheetsService:
                 logger.error(f"Review с ID {review_id} не найдена")
                 return False
 
-            worksheet.update_cell(row_index, 4, feedback)  # 4 — индекс столбца "Feedback"
-            worksheet.update_cell(row_index, 5, score)  # 5 — индекс столбца "Score"
-            logger.info(f"Feedback review с id={review_id} обновлён")
-            logger.info(f"Score review с id={review_id} обновлён")
+            if feedback != '' and score != -1:
+                worksheet.update_cell(row_index, 4, feedback)  # 4 — индекс столбца "Feedback"
+                worksheet.update_cell(row_index, 5, score)  # 5 — индекс столбца "Score"
+                logger.info(f"Feedback and Score review с id={review_id} обновлёны")
+            elif feedback != '':
+                worksheet.update_cell(row_index, 4, feedback)
+                logger.info(f"Feedback review с id={review_id} обновлён")
+            elif score != -1:
+                worksheet.update_cell(row_index, 5, score)
+                logger.info(f"Score review с id={review_id} обновлён")
             return True
 
         except Exception as e:
