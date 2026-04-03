@@ -6,6 +6,8 @@ load_dotenv()
 
 # Получаем переменные окружения
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 
 PROXY_LOGIN = os.getenv("PROXY_LOGIN")
@@ -15,7 +17,7 @@ PROXY_PORT = os.getenv("PROXY_PORT")
 
 # Google Sheets
 GOOGLE_SHEET_ID = os.getenv('GOOGLE_SHEET_ID', '')
-GOOGLE_CREDENTIALS_PATH = os.getenv('GOOGLE_CREDENTIALS_PATH', 'credentials.json')
+GOOGLE_CREDENTIALS_PATH = os.path.join(BASE_DIR, 'credentials.json')
 
 
 START_MESSAGE_EFFECT = os.getenv('START_MESSAGE_EFFECT', '5046509860389126442')
