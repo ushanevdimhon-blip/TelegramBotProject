@@ -13,6 +13,7 @@ class SheetsService:    #возможно стоит сделать асинхр
         self._reviews_worksheet = None
         self._submissions_worksheet = None
         self._users_worksheet = None
+        self.spreadsheet = None
         try:
             credentials = Credentials.from_service_account_file(
                 GOOGLE_CREDENTIALS_PATH,
@@ -28,6 +29,9 @@ class SheetsService:    #возможно стоит сделать асинхр
 
     def get_worksheet(self, worksheet_name: str):
         """Получить вкладку таблицы (лист) по названию"""
+        if self.spreadsheet is None:
+            logger.error("Google Sheets не инициализирован (проверьте credentials.json)")
+            return None
         try:
             return self.spreadsheet.worksheet(worksheet_name)
         except gspread.WorksheetNotFound:
