@@ -28,7 +28,7 @@ async def cmd_start(message: Message):
             f"Вы зарегистрированы в системе.\n"
             f"Используйте /submit чтобы сдать работу\n"
             f"Используйте /next чтобы взять работу на проверку",
-            message_effect=START_MESSAGE_EFFECT
+            message_effect_id=START_MESSAGE_EFFECT
         )
     else:
         await message.answer(
