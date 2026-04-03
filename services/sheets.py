@@ -11,6 +11,9 @@ class SheetsService:
     """Сервис для работы с Google Таблицами"""
 
     def __init__(self):
+        self._reviews_worksheet = None
+        self._submissions_worksheet = None
+        self._users_worksheet = None
         try:
             credentials = Credentials.from_service_account_file(
                 GOOGLE_CREDENTIALS_PATH,
@@ -23,24 +26,44 @@ class SheetsService:
             self.spreadsheet = self.client.open_by_key(GOOGLE_SHEET_ID)
         except Exception as e:
             logger.error(f"Ошибка авторизации Google Sheets: {e}")
-            raise
 
     def get_worksheet(self, worksheet_name: str):
         """Получить вкладку таблицы (лист) по названию"""
         try:
             return self.spreadsheet.worksheet(worksheet_name)
+        except gspread.WorksheetNotFound:
+            logger.error(f"Лист '{worksheet_name}' не существует")
+            return None
         except Exception as e:
             logger.error(f"Ошибка получения листа {worksheet_name}: {e}")
             return None
-        #Пример использования: worksheet = sheets.get_worksheet('users') - получить лист users
+
+    @property
+    def users_worksheet(self):
+        """Получение Users листа"""
+        if self._users_worksheet is None:
+            self._users_worksheet = self.get_worksheet('Users')
+        return self._users_worksheet
+
+    @property
+    def submissions_worksheet(self):
+        """Получение Submissions листа"""
+        if self._submissions_worksheet is None:
+            self._submissions_worksheet = self.get_worksheet('Submissions')
+        return self._submissions_worksheet
+
+    @property
+    def reviews_worksheet(self):
+        """Получение Reviews листа"""
+        if self._reviews_worksheet is None:
+            self._reviews_worksheet = self.get_worksheet('Reviews')
+        return self._reviews_worksheet
 
     def add_user(self, telegram_id: int, username: str, role: str = 'student') -> bool:
-        """Добавить пользователя в таблицу Users"""
-        try:
-            worksheet = self.get_worksheet('Users')
-            if not worksheet:
+        """Добавить пользователя в таблицу"""
+        if self.users_worksheet is None:
                 return False
-
+        try:
             # Проверяем есть ли уже пользователь
             existing = self.get_user(telegram_id)
             if existing:
@@ -49,7 +72,7 @@ class SheetsService:
 
             # Добавляем нового
             from datetime import datetime
-            worksheet.append_row([
+            self.users_worksheet.append_row([
                 telegram_id,
                 username,
                 role,
@@ -63,12 +86,10 @@ class SheetsService:
 
     def get_user(self, telegram_id: int) -> dict | None:
         """Получить пользователя по Telegram ID"""
-        try:
-            worksheet = self.get_worksheet('Users')
-            if not worksheet:
+        if self.users_worksheet is None:
                 return None
-
-            all_records = worksheet.get_all_records()
+        try:
+            all_records = self.users_worksheet.get_all_records()
             for record in all_records:
                 if int(record.get('telegram_id', 0)) == telegram_id:
                     return record
@@ -100,15 +121,13 @@ class SheetsService:
             logger.error("Ошибка добавления submission: для добавления submission необходимо хотя бы указать"
                          "Telegram ID или по ФИО студента")
             return False
+        if self.submissions_worksheet is None:
+            return False
         try:
-            worksheet = self.get_worksheet('Submissions')
-            if not worksheet:
-                return False
-
-            submission_id = self._generate_id(worksheet)
+            submission_id = self._generate_id(self.submissions_worksheet)
 
             from datetime import datetime
-            worksheet.append_row([
+            self.submissions_worksheet.append_row([
                 submission_id,
                 telegram_id,
                 student_name,
@@ -127,11 +146,10 @@ class SheetsService:
         Получить not_solved submission в порядке очереди,
         либо submission с любым статусом по id
         """
+        if self.submissions_worksheet is None:
+            return None
         try:
-            worksheet = self.get_worksheet('Submissions')
-            if not worksheet:
-                return None
-            all_records = worksheet.get_all_records()
+            all_records = self.submissions_worksheet.get_all_records()
             if submission_id:
                 for record in all_records:
                     if int(record.get('ID', 0)) == submission_id:
@@ -148,12 +166,10 @@ class SheetsService:
         Опционально обновить статус и/или file_link submission по ID.
         Для обновления чего-то одного необходимо явно указать, что именно(file_link=...).
         """
+        if self.submissions_worksheet is None:
+            return False
         try:
-            worksheet = self.get_worksheet('Submissions')
-            if not worksheet:
-                return False
-
-            all_records = worksheet.get_all_records()
+            all_records = self.submissions_worksheet.get_all_records()
             row_index = None
             for i, record in enumerate(all_records):
                 if int(record.get('ID', 0)) == submission_id:
@@ -165,14 +181,14 @@ class SheetsService:
                 return False
 
             if new_status != '' and file_link != '':
-                worksheet.update_cell(row_index, 5, new_status)  # 4 — индекс столбца "Status"
-                worksheet.update_cell(row_index, 4, file_link)  # 3 — индекс столбца "File_link"
+                self.submissions_worksheet.update_cell(row_index, 5, new_status)  # 4 — индекс столбца "Status"
+                self.submissions_worksheet.update_cell(row_index, 4, file_link)  # 3 — индекс столбца "File_link"
                 logger.info(f"Status and File_link submission {submission_id} обновлёны")
             elif new_status != '':
-                worksheet.update_cell(row_index, 5, new_status)
+                self.submissions_worksheet.update_cell(row_index, 5, new_status)
                 logger.info(f"Status submission {submission_id} обновлён")
             elif file_link != '':
-                worksheet.update_cell(row_index, 4, file_link)
+                self.submissions_worksheet.update_cell(row_index, 4, file_link)
                 logger.info(f"Feedback submission {submission_id} обновлён")
             return True
         except Exception as e:
@@ -181,15 +197,13 @@ class SheetsService:
 
     def add_review(self, submission_id: int, reviewer_id: int) -> bool:
         """Добавить review по индексу submission и телеграм id проверяющего"""
+        if self.reviews_worksheet is None:
+            return False
         try:
-            worksheet = self.get_worksheet('Reviews')
-            if not worksheet:
-                return False
-
-            review_id = self._generate_id(worksheet)
+            review_id = self._generate_id(self.reviews_worksheet)
 
             from datetime import datetime
-            worksheet.append_row([
+            self.reviews_worksheet.append_row([
                 review_id,
                 submission_id,
                 reviewer_id,
@@ -204,12 +218,10 @@ class SheetsService:
 
     def get_review(self, review_id: int) -> dict | None:
         """Получить review по его id"""
+        if self.reviews_worksheet is None:
+            return None
         try:
-            worksheet = self.get_worksheet('Reviews')
-            if not worksheet:
-                return None
-
-            all_records = worksheet.get_all_records()
+            all_records = self.reviews_worksheet.get_all_records()
             for record in all_records:
                 if int(record.get('ID', 0)) == review_id:
                     return record
@@ -221,12 +233,10 @@ class SheetsService:
         Обновить либо feedback, либо score, либо и то и то.
         Для обновления чего-то одного необходимо явно указать что именно(feedback=...).
         """
+        if self.reviews_worksheet is None:
+            return False
         try:
-            worksheet = self.get_worksheet('Reviews')
-            if not worksheet:
-                return False
-
-            all_records = worksheet.get_all_records()
+            all_records = self.reviews_worksheet.get_all_records()
             row_index = None
             for i, record in enumerate(all_records):
                 if int(record.get('ID', 0)) == review_id:
@@ -238,14 +248,14 @@ class SheetsService:
                 return False
 
             if feedback != '' and score != -1:
-                worksheet.update_cell(row_index, 4, feedback)  # 4 — индекс столбца "Feedback"
-                worksheet.update_cell(row_index, 5, score)  # 5 — индекс столбца "Score"
+                self.reviews_worksheet.update_cell(row_index, 4, feedback)  # 4 — индекс столбца "Feedback"
+                self.reviews_worksheet.update_cell(row_index, 5, score)  # 5 — индекс столбца "Score"
                 logger.info(f"Feedback and Score review с id={review_id} обновлёны")
             elif feedback != '':
-                worksheet.update_cell(row_index, 4, feedback)
+                self.reviews_worksheet.update_cell(row_index, 4, feedback)
                 logger.info(f"Feedback review с id={review_id} обновлён")
             elif score != -1:
-                worksheet.update_cell(row_index, 5, score)
+                self.reviews_worksheet.update_cell(row_index, 5, score)
                 logger.info(f"Score review с id={review_id} обновлён")
             return True
 
