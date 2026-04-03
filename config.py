@@ -5,12 +5,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Получаем переменные окружения
+
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-API_KEY = os.getenv('API_KEY')
+
 PROXY_LOGIN = os.getenv("PROXY_LOGIN")
 PROXY_PASSWORD = os.getenv("PROXY_PASSWORD")
 PROXY_IP = os.getenv("PROXY_IP")
 PROXY_PORT = os.getenv("PROXY_PORT")
+
+# Google Sheets
+GOOGLE_SHEET_ID = os.getenv('GOOGLE_SHEET_ID', '')
+GOOGLE_CREDENTIALS_PATH = os.getenv('GOOGLE_CREDENTIALS_PATH', 'credentials.json')
 
 
 START_MESSAGE_EFFECT = os.getenv('START_MESSAGE_EFFECT', '5046509860389126442')
