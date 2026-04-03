@@ -91,8 +91,15 @@ class SheetsService:
         else:
             return 1
 
-    def add_submission(self, telegram_id: int) -> bool:
-        """Добавить submission по Telegram ID"""
+    def add_submission(self, telegram_id: int=-1, student_name: str='', file_link: str='') -> bool:
+        """
+        Добавить submission по Telegram ID или по ФИО студента, также можно добавить ссылку на файл
+        При добавлении чего-то одного нужно явно указать, что именно(student_name=...)
+        """
+        if (file_link != '' and file_link == -1 and student_name == '')  or (file_link == '' and file_link == -1 and student_name == ''):
+            logger.error("Ошибка добавления submission: для добавления submission необходимо хотя бы указать"
+                         "Telegram ID или по ФИО студента")
+            return False
         try:
             worksheet = self.get_worksheet('Submissions')
             if not worksheet:
@@ -104,7 +111,8 @@ class SheetsService:
             worksheet.append_row([
                 submission_id,
                 telegram_id,
-                '',
+                student_name,
+                file_link,
                 'not_solved',
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ])
@@ -115,7 +123,10 @@ class SheetsService:
             return False
 
     def get_submission(self, submission_id=None) -> dict | None:
-        """Получить нерешенный submission в порядке очереди, либо submission с любым статусом по id"""
+        """
+        Получить not_solved submission в порядке очереди,
+        либо submission с любым статусом по id
+        """
         try:
             worksheet = self.get_worksheet('Submissions')
             if not worksheet:
@@ -135,7 +146,7 @@ class SheetsService:
     def update_submission(self, submission_id: int, file_link: str='', new_status: str='') -> bool:
         """
         Опционально обновить статус и/или file_link submission по ID.
-        Для обновления чего-то одного необходимо явно указать что именно(file_link=...).
+        Для обновления чего-то одного необходимо явно указать, что именно(file_link=...).
         """
         try:
             worksheet = self.get_worksheet('Submissions')
@@ -154,14 +165,14 @@ class SheetsService:
                 return False
 
             if new_status != '' and file_link != '':
-                worksheet.update_cell(row_index, 4, new_status)  # 4 — индекс столбца "Status"
-                worksheet.update_cell(row_index, 3, file_link)  # 3 — индекс столбца "File_link"
+                worksheet.update_cell(row_index, 5, new_status)  # 4 — индекс столбца "Status"
+                worksheet.update_cell(row_index, 4, file_link)  # 3 — индекс столбца "File_link"
                 logger.info(f"Status and File_link submission {submission_id} обновлёны")
             elif new_status != '':
-                worksheet.update_cell(row_index, 4, new_status)
+                worksheet.update_cell(row_index, 5, new_status)
                 logger.info(f"Status submission {submission_id} обновлён")
             elif file_link != '':
-                worksheet.update_cell(row_index, 3, file_link)
+                worksheet.update_cell(row_index, 4, file_link)
                 logger.info(f"Feedback submission {submission_id} обновлён")
             return True
         except Exception as e:
