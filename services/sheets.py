@@ -62,7 +62,8 @@ class SheetsService:
     def add_user(self, telegram_id: int, username: str, role: str = 'student') -> bool:
         """Добавить пользователя в таблицу"""
         if self.users_worksheet is None:
-                return False
+            logger.error(f"self.users_worksheet is None")
+            return False
         try:
             # Проверяем есть ли уже пользователь
             existing = self.get_user(telegram_id)
@@ -87,7 +88,8 @@ class SheetsService:
     def get_user(self, telegram_id: int) -> dict | None:
         """Получить пользователя по Telegram ID"""
         if self.users_worksheet is None:
-                return None
+            logger.error(f"self.users_worksheet is None")
+            return None
         try:
             all_records = self.users_worksheet.get_all_records()
             for record in all_records:
@@ -122,6 +124,7 @@ class SheetsService:
                          "Telegram ID или по ФИО студента")
             return False
         if self.submissions_worksheet is None:
+            logger.error(f"self.submissions_worksheet is None")
             return False
         try:
             submission_id = self._generate_id(self.submissions_worksheet)
@@ -147,6 +150,7 @@ class SheetsService:
         либо submission с любым статусом по id
         """
         if self.submissions_worksheet is None:
+            logger.error(f"self.submissions_worksheet is None")
             return None
         try:
             all_records = self.submissions_worksheet.get_all_records()
@@ -167,6 +171,7 @@ class SheetsService:
         Для обновления чего-то одного необходимо явно указать, что именно(file_link=...).
         """
         if self.submissions_worksheet is None:
+            logger.error(f"self.submissions_worksheet is None")
             return False
         try:
             all_records = self.submissions_worksheet.get_all_records()
@@ -198,6 +203,7 @@ class SheetsService:
     def add_review(self, submission_id: int, reviewer_id: int) -> bool:
         """Добавить review по индексу submission и телеграм id проверяющего"""
         if self.reviews_worksheet is None:
+            logger.error(f"self.reviews_worksheet is None")
             return False
         try:
             review_id = self._generate_id(self.reviews_worksheet)
@@ -219,6 +225,7 @@ class SheetsService:
     def get_review(self, review_id: int) -> dict | None:
         """Получить review по его id"""
         if self.reviews_worksheet is None:
+            logger.error(f"self.reviews_worksheet is None")
             return None
         try:
             all_records = self.reviews_worksheet.get_all_records()
@@ -234,6 +241,7 @@ class SheetsService:
         Для обновления чего-то одного необходимо явно указать что именно(feedback=...).
         """
         if self.reviews_worksheet is None:
+            logger.error(f"self.reviews_worksheet is None")
             return False
         try:
             all_records = self.reviews_worksheet.get_all_records()
