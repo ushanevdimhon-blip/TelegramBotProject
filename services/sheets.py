@@ -244,6 +244,7 @@ class SheetsService:    #возможно стоит сделать асинхр
             return False
 
     def get_review_id(self, submission_id: int, reviewer_id: int=None):
+        """Получить ID review по submission ID или по submission ID и ID проверяющего"""
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
             return None
@@ -262,8 +263,6 @@ class SheetsService:    #возможно стоит сделать асинхр
         except Exception as e:
             logger.error(f"Error while getting review_id: {e}")
             return None
-
-
 
     def get_review(self, review_id: int) -> dict | None:
         """Получить review по его id или по submission id"""
