@@ -242,8 +242,30 @@ class SheetsService:    #возможно стоит сделать асинхр
             logger.error(f"ошибка добавления review: {e}")
             return False
 
+    def get_review_id(self, submission_id: int, reviewer_id: int=None):
+        if self.reviews_worksheet is None:
+            logger.error(f"self.reviews_worksheet is None")
+            return None
+        try:
+            rows = self.reviews_worksheet.get_all_records()
+
+            for row in rows:
+                if row.get('Submission_ID') == submission_id:
+                    if reviewer_id is not None:
+                        if row.get('Reviewer_ID') == reviewer_id:
+                            return row.get('ID')
+                        continue
+                    else:
+                        return row.get('ID')
+            return None
+        except Exception as e:
+            logger.error(f"Error while getting review_id: {e}")
+            return None
+
+
+
     def get_review(self, review_id: int) -> dict | None:
-        """Получить review по его id"""
+        """Получить review по его id или по submission id"""
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
             return None
