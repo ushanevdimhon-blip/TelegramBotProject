@@ -59,7 +59,7 @@ class SheetsService:    #возможно стоит сделать асинхр
             self._reviews_worksheet = self.get_worksheet('Reviews')
         return self._reviews_worksheet
 
-    def add_user(self, telegram_id: int, username: str, role: str = 'student') -> bool:
+    def add_user(self, telegram_id: int, username: str, user_full_name: str, role: str = 'student') -> bool:
         """Добавить пользователя в таблицу"""
         if self.users_worksheet is None:
             logger.error(f"self.users_worksheet is None")
@@ -76,6 +76,7 @@ class SheetsService:    #возможно стоит сделать асинхр
             self.users_worksheet.append_row([
                 telegram_id,
                 username,
+                user_full_name,
                 role,
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ])
