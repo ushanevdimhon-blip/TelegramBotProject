@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class SheetsService:
+class SheetsService:    #возможно стоит сделать асинхронным - вызовы в отдельном потоке
     """Сервис для работы с Google Таблицами"""
 
     def __init__(self):
@@ -59,7 +59,7 @@ class SheetsService:
             self._reviews_worksheet = self.get_worksheet('Reviews')
         return self._reviews_worksheet
 
-    def add_user(self, telegram_id: int, username: str, role: str = 'student') -> bool:
+    def add_user(self, telegram_id: int, username: str, user_full_name: str, role: str = 'student') -> bool:
         """Добавить пользователя в таблицу"""
         if self.users_worksheet is None:
             logger.error(f"self.users_worksheet is None")
@@ -76,6 +76,7 @@ class SheetsService:
             self.users_worksheet.append_row([
                 telegram_id,
                 username,
+                user_full_name,
                 role,
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ])
@@ -114,20 +115,20 @@ class SheetsService:
         else:
             return 1
 
-    def add_submission(self, telegram_id: int=-1, student_name: str='', file_link: str='') -> bool:
+    def add_submission(self, telegram_id: int, student_name: str='', file_link: str='') -> bool:
         """
         Добавить submission по Telegram ID или по ФИО студента, также можно добавить ссылку на файл
         При добавлении чего-то одного нужно явно указать, что именно(student_name=...)
         """
-        if (file_link != '' and file_link == -1 and student_name == '')  or (file_link == '' and file_link == -1 and student_name == ''):
-            logger.error("Ошибка добавления submission: для добавления submission необходимо хотя бы указать"
-                         "Telegram ID или по ФИО студента")
-            return False
         if self.submissions_worksheet is None:
             logger.error(f"self.submissions_worksheet is None")
             return False
         try:
             submission_id = self._generate_id(self.submissions_worksheet)
+            status = "redacting"
+
+            if student_name != '' and file_link != '':
+                status = "not_solved"
 
             from datetime import datetime
             self.submissions_worksheet.append_row([
@@ -135,7 +136,7 @@ class SheetsService:
                 telegram_id,
                 student_name,
                 file_link,
-                'not_solved',
+                status,
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ])
             logger.info(f"submission {submission_id} добавлена")
@@ -143,6 +144,22 @@ class SheetsService:
         except Exception as e:
             logger.error(f"Ошибка добавления submission: {e}")
             return False
+
+    def get_submission_id(self, telegram_id: int):
+        """Получить submission ID по telegram ID"""
+        if self.submissions_worksheet is None:
+            logger.error(f"self.submissions_worksheet is None")
+            return None
+        try:
+            cell = self.submissions_worksheet.find(str(telegram_id), in_column=2)
+            if cell is not None:
+                submission_id_cell = self.submissions_worksheet.cell(cell.row, 1)
+                return submission_id_cell.value
+            else:
+                logger.info(f"Telegram ID {telegram_id} не найден")
+                return None
+        except Exception as e:
+            logger.error(f"Ошибка получения submission_id: {e}")
 
     def get_submission(self, submission_id=None) -> dict | None:
         """
@@ -157,9 +174,13 @@ class SheetsService:
             if submission_id:
                 for record in all_records:
                     if int(record.get('ID', 0)) == submission_id:
+                        self.update_submission(submission_id, new_status='in_progress')
+                        record['Status'] = 'in_progress'
                         return record
             for record in all_records:
                 if record.get('Status') == 'not_solved':
+                    self.update_submission(record.get('ID'), new_status='in_progress')
+                    record['Status'] = 'in_progress'
                     return record
         except Exception as e:
             logger.error(f"Ошибка получения submission: {e}")
@@ -222,8 +243,29 @@ class SheetsService:
             logger.error(f"ошибка добавления review: {e}")
             return False
 
+    def get_review_id(self, submission_id: int, reviewer_id: int=None):
+        """Получить ID review по submission ID или по submission ID и ID проверяющего"""
+        if self.reviews_worksheet is None:
+            logger.error(f"self.reviews_worksheet is None")
+            return None
+        try:
+            rows = self.reviews_worksheet.get_all_records()
+
+            for row in rows:
+                if row.get('Submission_ID') == submission_id:
+                    if reviewer_id is not None:
+                        if row.get('Reviewer_ID') == reviewer_id:
+                            return row.get('ID')
+                        continue
+                    else:
+                        return row.get('ID')
+            return None
+        except Exception as e:
+            logger.error(f"Error while getting review_id: {e}")
+            return None
+
     def get_review(self, review_id: int) -> dict | None:
-        """Получить review по его id"""
+        """Получить review по его id или по submission id"""
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
             return None
