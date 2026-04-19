@@ -11,6 +11,7 @@ class SheetsService:    #возможно стоит сделать асинхр
     """Сервис для работы с Google Таблицами"""
     def __init__(self):
         self._reviews_worksheet = None
+        self._results_worksheet = None
         self._submissions_worksheet = None
         self._users_worksheet = None
         try:
@@ -57,6 +58,13 @@ class SheetsService:    #возможно стоит сделать асинхр
         if self._reviews_worksheet is None:
             self._reviews_worksheet = self.get_worksheet('Reviews')
         return self._reviews_worksheet
+
+    @property
+    def results_worksheet(self):
+        """Получение Results листа"""
+        if self._results_worksheet is None:
+            self._results_worksheet = self.get_worksheet('Results')
+        return self._results_worksheet
 
     def add_user(self, telegram_id: int, username: str, user_full_name: str, role: str = '') -> bool:
         """Добавить пользователя в таблицу"""
@@ -113,6 +121,59 @@ class SheetsService:    #возможно стоит сделать асинхр
             return max(existing_ids) + 1 if existing_ids else 1
         else:
             return 1
+
+    def add_result(self, reviewer_id: int , student_id: int ,feedback: str, score: int, middle_score: int | float) -> bool:
+        """Добавить result"""
+        if self.results_worksheet is None:
+            logger.error(f"self.results_worksheet is None")
+            return False
+        try:
+            self.results_worksheet.append_row([
+                reviewer_id,
+                student_id,
+                feedback,
+                score,
+                middle_score,
+            ])
+            return True
+        except Exception as e:
+            logger.error(f"ошибка добавления result: {e}")
+            return False
+
+    #TODO: если надо будет после checka в боте отправить результаты, то добавить метод get_result
+    #TODO: добавить в таблицу поля имя проверяющего и имя студента для удобного пользования организатором или студентами
+
+    #сейчас возвращает bool, но при надобности можно переделать под возврат dict и т.д.
+    def check(self, telegram_id: int, n: int) -> bool:
+        if self.reviews_worksheet is None:
+            logger.error(f"self.reviews_worksheet is None")
+            return False
+        if self.results_worksheet is None:
+            logger.error(f"self.results_worksheet is None")
+            return False
+        submission_id = self.get_submission_id(telegram_id)
+        middle_score = 0
+        scores = []
+        reviewers = []
+        feedbacks = []
+        rows_to_delete = []
+        try:
+            cells = self.reviews_worksheet.findall(str(submission_id), in_column=2)
+            if len(cells) < n: return False
+            for cell in cells:
+                scores.append(int(str(self.reviews_worksheet.cell(cell.row, 5).value)))
+                reviewers.append(str(self.reviews_worksheet.cell(cell.row, 3).value))
+                feedbacks.append(str(self.reviews_worksheet.cell(cell.row, 4).value))
+                rows_to_delete.append(cell.row)
+            middle_score = sum(scores) / len(scores)
+            for i in range(0,n):
+                self.add_result(reviewers[i], telegram_id, feedbacks[i], scores[i], middle_score)
+            for row in sorted(rows_to_delete, reverse=True):
+                self.reviews_worksheet.delete_rows(row)
+            return True
+        except Exception as e:
+            logger.error(f"Не удалось проверить: {e}")
+            return False
 
     def add_submission(self, telegram_id: int, student_name: str='', file_link: str='') -> bool:
         """
@@ -188,12 +249,12 @@ class SheetsService:    #возможно стоит сделать асинхр
             return None
 
     def get_n_submissions(self, asker_tg_id: int, n: int) -> list | None:
-        '''
+        """
         Получить n-ное количество работ, при нехватке работ возвращается список из тех, что есть
         :param asker_tg_id: tg id студента, от которого идет запрос на получение
         :param n: количество работ
         :return: список из n submissions
-        '''
+        """
         if self.submissions_worksheet is None:
             logger.error(f"self.submissions_worksheet is None")
             return None
@@ -206,7 +267,7 @@ class SheetsService:    #возможно стоит сделать асинхр
                 row_index += 1
                 number_of_reviewers = int(str(record.get("Number_of_reviewers")))
                 student_id = int(str(record.get("Student_ID")))
-                if number_of_reviewers == n or student_id == asker_tg_id:
+                if number_of_reviewers == n or student_id == asker_tg_id or str(record.get("Status")=='redacting'):
                     continue
                 count += 1
                 if count > n:
@@ -254,8 +315,9 @@ class SheetsService:    #возможно стоит сделать асинхр
             logger.error(f"Ошибка обновления submission: {e}")
             return False
 
-    def add_review(self, submission_id: int, reviewer_id: int) -> bool:
-        """Добавить review по индексу submission и телеграм id проверяющего"""
+    #Изменил: теперь обязательно всю инфу при создании указывать
+    def add_review(self, submission_id: int, reviewer_id: int, feedback: str, score: int) -> bool:
+        """Добавить review"""
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
             return False
@@ -267,8 +329,8 @@ class SheetsService:    #возможно стоит сделать асинхр
                 review_id,
                 submission_id,
                 reviewer_id,
-                '',
-                -1,
+                feedback,
+                score,
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ])
             return True
