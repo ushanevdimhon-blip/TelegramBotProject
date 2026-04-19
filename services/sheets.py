@@ -136,7 +136,8 @@ class SheetsService:    #возможно стоит сделать асинхр
                 student_name,
                 file_link,
                 status,
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                0
             ])
             logger.info(f"submission {submission_id} добавлена")
             return True
@@ -184,6 +185,38 @@ class SheetsService:    #возможно стоит сделать асинхр
         except Exception as e:
             logger.error(f"Ошибка получения submission: {e}")
             return None
+
+    def get_n_submissions(self, asker_tg_id: int, n: int) -> list | None:
+        '''
+        Получить n-ное количество работ, при нехватке работ возвращается список из тех, что есть
+        :param asker_tg_id: tg id студента, от которого идет запрос на получение
+        :param n: количество работ
+        :return: список из n submissions
+        '''
+        if self.submissions_worksheet is None:
+            logger.error(f"self.submissions_worksheet is None")
+            return None
+        try:
+            all_records = self.submissions_worksheet.get_all_records()
+            submissions = []
+            row_index = 1
+            count = 0
+            for record in all_records:
+                row_index += 1
+                number_of_reviewers = int(str(record.get("Number_of_reviewers")))
+                student_id = int(str(record.get("Student_ID")))
+                if number_of_reviewers == n or student_id == asker_tg_id:
+                    continue
+                count += 1
+                if count > n:
+                    break
+                self.submissions_worksheet.update_cell(row_index, 7, number_of_reviewers + 1)
+                submissions.append(record)
+            return submissions
+        except Exception as e:
+            logger.error(f"Не удалось получить {n} submissions для {asker_tg_id}: {e}")
+            return None
+
 
     def update_submission(self, submission_id: int, file_link: str='', new_status: str='') -> bool:
         """
