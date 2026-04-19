@@ -145,7 +145,8 @@ class SheetsService:    #возможно стоит сделать асинхр
             logger.error(f"Ошибка добавления submission: {e}")
             return False
 
-    def get_submission_id(self, telegram_id: int):
+    #надо будет переделать, если 1 студент сможет загружать больше 1 работы => надо будет переделать check.
+    def get_submission_id(self, telegram_id: int) -> int | None:
         """Получить submission ID по telegram ID"""
         if self.submissions_worksheet is None:
             logger.error(f"self.submissions_worksheet is None")
@@ -154,7 +155,7 @@ class SheetsService:    #возможно стоит сделать асинхр
             cell = self.submissions_worksheet.find(str(telegram_id), in_column=2)
             if cell is not None:
                 submission_id_cell = self.submissions_worksheet.cell(cell.row, 1)
-                return submission_id_cell.value
+                return int(str(submission_id_cell.value))
             else:
                 logger.info(f"Telegram ID {telegram_id} не найден")
                 return None
@@ -275,7 +276,7 @@ class SheetsService:    #возможно стоит сделать асинхр
             logger.error(f"ошибка добавления review: {e}")
             return False
 
-    def get_review_id(self, submission_id: int, reviewer_id: int=None):
+    def get_review_id(self, submission_id: int, reviewer_id: int=None) -> int | None:
         """Получить ID review по submission ID или по submission ID и ID проверяющего"""
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
@@ -287,10 +288,10 @@ class SheetsService:    #возможно стоит сделать асинхр
                 if row.get('Submission_ID') == submission_id:
                     if reviewer_id is not None:
                         if row.get('Reviewer_ID') == reviewer_id:
-                            return row.get('ID')
+                            return int(str(row.get('ID')))
                         continue
                     else:
-                        return row.get('ID')
+                        return int(str(row.get('ID')))
             return None
         except Exception as e:
             logger.error(f"Error while getting review_id: {e}")
