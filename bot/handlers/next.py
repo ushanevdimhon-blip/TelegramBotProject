@@ -28,15 +28,11 @@ async def next_message(message: Message):
     student_name = submission.get("Student_name","Не указано")
     file_link = submission.get("File_link","Не указана")
 
-    #TODO: подумать над тем, что происходит, когда 2 эксперта одновременно начинают проверку
-    #В этом случае у работы статус not_solved и она уходит одновременно двум экспертам
-    # Возможно стоит добавить in_progress статус когда работу уже смотрят, но  как это контролировать?
-    # Возможно по ID в таблице Reviews (если в этой таблице есть айди работы и нет оценки - in_progress)
-    # Такая работа не уходит другому эксперту, при этом если такая работа последняя то вместо "работы закончились" стоит писать
-    # Что работу проверяет другой эксперт
-    # Если другой эксперт пропускает работу, то из Reviews удаляется запись об этой работе (часть с реализацией inline кнопки _skip)
+    #TODO: Если другой эксперт пропускает работу, то из Reviews удаляется запись об этой работе (часть с реализацией inline кнопки _skip)
 
-    status = "Не проверено" if submission.get("Status","") == "not_solved" else "Проверено"
+    status = "Не проверено" if submission.get("Status", "") == "not_solved" \
+        else "Проверяется" if submission.get("Status", "") == "in_progress" \
+        else "Проверено"
 
     if not sheets.add_review(submission_id=submission_id, reviewer_id=reviewer_id):
         await message.answer("Не удалось создать запись о проверке 🥺")
@@ -50,7 +46,6 @@ async def next_message(message: Message):
         student_info += f"ФИО:  {student_name}\n"
 
     #TODO: прописать логику пропуска работ и добавления ревью (лучше inline кнопками)
-    #TODO: в этом файле можно просто создать кнопки, а логику прописать уже в соответствующих handlers
 
     await message.answer(
         f"**НОВАЯ РАБОТА #{submission_id}**\n\n"
