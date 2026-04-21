@@ -11,7 +11,6 @@ class SheetsService:    #возможно стоит сделать асинхр
     """Сервис для работы с Google Таблицами"""
     def __init__(self):
         self._reviews_worksheet = None
-        self._results_worksheet = None
         self._submissions_worksheet = None
         self._users_worksheet = None
         try:
@@ -58,13 +57,6 @@ class SheetsService:    #возможно стоит сделать асинхр
         if self._reviews_worksheet is None:
             self._reviews_worksheet = self.get_worksheet('Reviews')
         return self._reviews_worksheet
-
-    @property
-    def results_worksheet(self):
-        """Получение Results листа"""
-        if self._results_worksheet is None:
-            self._results_worksheet = self.get_worksheet('Results')
-        return self._results_worksheet
 
     def add_user(self, telegram_id: int, username: str, user_full_name: str, role: str = '') -> bool:
         """Добавить пользователя в таблицу"""
@@ -122,54 +114,30 @@ class SheetsService:    #возможно стоит сделать асинхр
         else:
             return 1
 
-    def add_result(self, reviewer_id: int , student_id: int ,feedback: str, score: int, middle_score: int | float) -> bool:
-        """Добавить result"""
-        if self.results_worksheet is None:
-            logger.error(f"self.results_worksheet is None")
-            return False
-        try:
-            self.results_worksheet.append_row([
-                reviewer_id,
-                student_id,
-                feedback,
-                score,
-                middle_score,
-            ])
-            return True
-        except Exception as e:
-            logger.error(f"ошибка добавления result: {e}")
-            return False
-
-    #TODO: если надо будет после checka в боте отправить результаты, то добавить метод get_result
-    # ?как-то стоит добавлять все ревью в результаты, а не только во 2 режиме
-    # добавить в таблицу поля имя проверяющего и имя студента для удобного пользования организатором или студентами
-    # рефакторинг: добавить подписи методам, изменить уже существующие: params & returns
+    #TODO: рефакторинг: добавить подписи методам, изменить уже существующие: params & returns
     # ?возможно надо добавить разброс оценок
     # ?возможно стоит добавить увеличивать number_of_reviewers и для первого режима
 
     #сейчас возвращает bool, но при надобности можно переделать под возврат dict и т.д.
-    def check_and_aggregate(self, telegram_id: int, n: int) -> bool:
+    def get_aggregated_result(self, telegram_id: int, n: int) -> list | bool:
         """
-        Ищет подходящие review и если их достаточное количество, удаляет их из листа review, вычисляет
-        средний балл и формирует N строк в листе results
+        Ищет подходящие N review, удаляет их из листа review, вычисляет
+        средний балл и формирует список result из словарей результатов
         :param telegram_id: id студента
         :param n: число N для второго режима, задаваемое организатором
-        :return: bool
+        :return: bool и список словарей результатов
         """
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
-            return False
-        if self.results_worksheet is None:
-            logger.error(f"self.results_worksheet is None")
             return False
         submission_id = self.get_submission_id(telegram_id)
         scores = []
         reviewers = []
         feedbacks = []
         rows_to_delete = []
+        result = []
         try:
             cells = self.reviews_worksheet.findall(str(submission_id), in_column=2)
-            if len(cells) < n: return False
             for cell in cells:
                 scores.append(int(str(self.reviews_worksheet.cell(cell.row, 5).value)))
                 reviewers.append(str(self.reviews_worksheet.cell(cell.row, 3).value))
@@ -177,10 +145,35 @@ class SheetsService:    #возможно стоит сделать асинхр
                 rows_to_delete.append(cell.row)
             middle_score = sum(scores) / len(scores)
             for i in range(0,n):
-                self.add_result(reviewers[i], telegram_id, feedbacks[i], scores[i], middle_score)
+                result.append({
+                    "Reviewer_ID": reviewers[i],
+                    "Student_ID": telegram_id,
+                    "Feedback": feedbacks[i],
+                    "Score": scores[i],
+                    "Middle_score": middle_score
+                    }
+                )
             for row in sorted(rows_to_delete, reverse=True):
                 self.reviews_worksheet.delete_rows(row)
-            return True
+            return result
+        except Exception as e:
+            logger.error(f"Не удалось получить: {e}")
+            return False
+
+    def check(self, telegram_id: int, n: int) -> bool:
+        """
+        Находит все подходящие review по тг id и проверяет равно ли их количество N
+        :param telegram_id: id студента
+        :param n: число N для второго режима, задаваемое организатором
+        :return: bool
+        """
+        if self.reviews_worksheet is None:
+            logger.error(f"self.reviews_worksheet is None")
+            return False
+        try:
+            submission_id = self.get_submission_id(telegram_id)
+            cells = self.reviews_worksheet.findall(str(submission_id), in_column=2)
+            if len(cells) == n: return True
         except Exception as e:
             logger.error(f"Не удалось проверить: {e}")
             return False
