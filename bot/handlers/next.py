@@ -25,7 +25,6 @@ async def next_message(message: Message):
 
     submission_id = int(submission.get("ID"))
     student_id = submission.get("Student_ID","")
-    student_name = submission.get("Student_name","Не указано")
     file_link = submission.get("File_link","Не указана")
 
     #TODO: Если другой эксперт пропускает работу, то из Reviews удаляется запись об этой работе (часть с реализацией inline кнопки _skip)
@@ -42,8 +41,6 @@ async def next_message(message: Message):
     student_info = ""
     if student_id:
         student_info = f"👤 Студент: ID `{student_id}`\n"
-    if student_name:
-        student_info += f"ФИО:  {student_name}\n"
 
     #TODO: прописать логику пропуска работ и добавления ревью (лучше inline кнопками)
 
