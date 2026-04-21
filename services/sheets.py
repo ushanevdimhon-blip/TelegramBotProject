@@ -141,10 +141,21 @@ class SheetsService:    #возможно стоит сделать асинхр
             return False
 
     #TODO: если надо будет после checka в боте отправить результаты, то добавить метод get_result
-    #TODO: добавить в таблицу поля имя проверяющего и имя студента для удобного пользования организатором или студентами
+    # ?как-то стоит добавлять все ревью в результаты, а не только во 2 режиме
+    # добавить в таблицу поля имя проверяющего и имя студента для удобного пользования организатором или студентами
+    # рефакторинг: добавить подписи методам, изменить уже существующие: params & returns
+    # ?возможно надо добавить разброс оценок
+    # ?возможно стоит добавить увеличивать number_of_reviewers и для первого режима
 
     #сейчас возвращает bool, но при надобности можно переделать под возврат dict и т.д.
-    def check(self, telegram_id: int, n: int) -> bool:
+    def check_and_aggregate(self, telegram_id: int, n: int) -> bool:
+        """
+        Ищет подходящие review и если их достаточное количество, удаляет их из листа review, вычисляет
+        средний балл и формирует N строк в листе results
+        :param telegram_id: id студента
+        :param n: число N для второго режима, задаваемое организатором
+        :return: bool
+        """
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
             return False
@@ -152,7 +163,6 @@ class SheetsService:    #возможно стоит сделать асинхр
             logger.error(f"self.results_worksheet is None")
             return False
         submission_id = self.get_submission_id(telegram_id)
-        middle_score = 0
         scores = []
         reviewers = []
         feedbacks = []
@@ -175,10 +185,9 @@ class SheetsService:    #возможно стоит сделать асинхр
             logger.error(f"Не удалось проверить: {e}")
             return False
 
-    def add_submission(self, telegram_id: int, student_name: str='', file_link: str='') -> bool:
+    def add_submission(self, telegram_id: int, student_name: str, file_link: str) -> bool:
         """
-        Добавить submission по Telegram ID или по ФИО студента, также можно добавить ссылку на файл
-        При добавлении чего-то одного нужно явно указать, что именно(student_name=...)
+        Добавить submission по Telegram ID, по ФИО студента и ссылки на файл
         """
         if self.submissions_worksheet is None:
             logger.error(f"self.submissions_worksheet is None")
@@ -206,7 +215,6 @@ class SheetsService:    #возможно стоит сделать асинхр
             logger.error(f"Ошибка добавления submission: {e}")
             return False
 
-    #надо будет переделать, если 1 студент сможет загружать больше 1 работы => надо будет переделать check.
     def get_submission_id(self, telegram_id: int) -> int | None:
         """Получить submission ID по telegram ID"""
         if self.submissions_worksheet is None:
@@ -278,7 +286,6 @@ class SheetsService:    #возможно стоит сделать асинхр
         except Exception as e:
             logger.error(f"Не удалось получить {n} submissions для {asker_tg_id}: {e}")
             return None
-
 
     def update_submission(self, submission_id: int, file_link: str='', new_status: str='') -> bool:
         """
