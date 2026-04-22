@@ -1,6 +1,7 @@
 import gspread
 from google.oauth2.service_account import Credentials
 from gspread import worksheet
+from pip._internal.operations import check
 
 from config import GOOGLE_SHEET_ID, GOOGLE_CREDENTIALS_PATH
 import logging
@@ -129,6 +130,9 @@ class SheetsService:    #возможно стоит сделать асинхр
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
             return False
+        if not self.check(telegram_id, n):
+            logger.error(f"check failed: {telegram_id}")
+            return False
         submission_id = self.get_submission_id(telegram_id)
         scores = []
         reviewers = []
@@ -161,7 +165,7 @@ class SheetsService:    #возможно стоит сделать асинхр
 
     def check(self, telegram_id: int, n: int) -> bool:
         """
-        Находит все подходящие review по тг id и проверяет равно ли их количество N
+        Находит все подходящие review по тг id и проверяет равно ли количество готовых review N
         :param telegram_id: id студента
         :param n: число N для второго режима, задаваемое организатором
         :return: bool
@@ -172,7 +176,13 @@ class SheetsService:    #возможно стоит сделать асинхр
         try:
             submission_id = self.get_submission_id(telegram_id)
             cells = self.reviews_worksheet.findall(str(submission_id), in_column=2)
-            if len(cells) == n: return True
+            if len(cells) != n: return False
+            for cell in cells:
+                review_id = self.reviews_worksheet.cell(cell.row, 1).value
+                review = self.get_review(int(review_id))
+                if review["Feedback"] == "none" or review["Score"] == "-1":
+                    return False
+            return True
         except Exception as e:
             logger.error(f"Не удалось проверить: {e}")
             return False
@@ -228,7 +238,8 @@ class SheetsService:    #возможно стоит сделать асинхр
     def get_submission(self, submission_id=None) -> dict | None:
         """
         Получить not_solved submission в порядке очереди,
-        либо submission с любым статусом по id
+        либо submission с любым статусом по id.
+        Меняет статус на in_progress
         """
         if self.submissions_worksheet is None:
             logger.error(f"self.submissions_worksheet is None")
@@ -250,6 +261,24 @@ class SheetsService:    #возможно стоит сделать асинхр
             logger.error(f"Ошибка получения submission: {e}")
             return None
 
+    def get_submission_by_id(self, submission_id: int) -> dict | None:
+        """
+            Получить submission по id.
+            Не меняет статус
+        """
+        if self.submissions_worksheet is None:
+            logger.error(f"self.submissions_worksheet is None")
+            return None
+        try:
+            all_records = self.submissions_worksheet.get_all_records()
+            for record in all_records:
+                if int(record.get('ID', 0)) == submission_id:
+                    return record
+        except Exception as e:
+            logger.error(f"Ошибка получения submission по id: {e}")
+
+    # возможно стоит убрать логику обновления number_of_reviewers
+    # просто проходится по записям и сравнивать n
     def get_n_submissions(self, asker_tg_id: int, n: int) -> list | None:
         """
         Получить n-ное количество работ, при нехватке работ возвращается список из тех, что есть
@@ -281,7 +310,7 @@ class SheetsService:    #возможно стоит сделать асинхр
             logger.error(f"Не удалось получить {n} submissions для {asker_tg_id}: {e}")
             return None
 
-    def update_submission(self, submission_id: int, file_link: str='', new_status: str='') -> bool:
+    def update_submission(self, submission_id: int, file_link: str='', new_status: str='', n_of_rev: int=0) -> bool:
         """
         Опционально обновить статус и/или file_link submission по ID.
         Для обновления чего-то одного необходимо явно указать, что именно(file_link=...).
@@ -301,23 +330,21 @@ class SheetsService:    #возможно стоит сделать асинхр
                 logger.error(f"Submission с ID {submission_id} не найдена")
                 return False
 
-            if new_status != '' and file_link != '':
-                self.submissions_worksheet.update_cell(row_index, 5, new_status)  # 4 — индекс столбца "Status"
-                self.submissions_worksheet.update_cell(row_index, 4, file_link)  # 3 — индекс столбца "File_link"
-                logger.info(f"Status and File_link submission {submission_id} обновлёны")
-            elif new_status != '':
+            if new_status != '':
                 self.submissions_worksheet.update_cell(row_index, 5, new_status)
                 logger.info(f"Status submission {submission_id} обновлён")
-            elif file_link != '':
+            if file_link != '':
                 self.submissions_worksheet.update_cell(row_index, 4, file_link)
                 logger.info(f"Feedback submission {submission_id} обновлён")
+            if n_of_rev != 0:
+                self.submissions_worksheet.update_cell(row_index, 7, n_of_rev)
+                logger.info(f"n_of_rev submission {submission_id} обновлён")
             return True
         except Exception as e:
             logger.error(f"Ошибка обновления submission: {e}")
             return False
 
-    #Изменил: теперь обязательно всю инфу при создании указывать
-    def add_review(self, submission_id: int, reviewer_id: int, feedback: str, score: int) -> bool:
+    def add_review(self, submission_id: int, reviewer_id: int, feedback: str='none', score: int=-1) -> bool:
         """Добавить review"""
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
@@ -373,6 +400,22 @@ class SheetsService:    #возможно стоит сделать асинхр
         except Exception as e:
             logger.error(f"Ошибка получения review: {e}")
 
+    # возможно стоит убрать логику обновления number_of_reviewers
+    def delete_review(self, review_id: int) -> bool:
+        if self.reviews_worksheet is None:
+            logger.error(f"self.reviews_worksheet is None")
+            return False
+        try:
+            cell = self.reviews_worksheet.find(str(review_id), in_column=1)
+            subm_id = self.reviews_worksheet.cell(cell.row, 2).value
+            subm = self.get_submission(int(subm_id))
+            self.update_submission(int(subm_id), n_of_rev=(subm["Number_of_reviewers"]) - 1)
+            self.reviews_worksheet.delete_rows(cell.row)
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка удаления review: {e}")
+            return False
+
     def update_review(self, review_id: int, feedback: str='', score: int=-1) -> bool:
         """
         Обновить либо feedback, либо score, либо и то и то.
@@ -393,24 +436,17 @@ class SheetsService:    #возможно стоит сделать асинхр
                 logger.error(f"Review с ID {review_id} не найдена")
                 return False
 
-            if feedback != '' and score != -1:
-                self.reviews_worksheet.update_cell(row_index, 4, feedback)  # 4 — индекс столбца "Feedback"
-                self.reviews_worksheet.update_cell(row_index, 5, score)  # 5 — индекс столбца "Score"
-                logger.info(f"Feedback and Score review с id={review_id} обновлёны")
-            elif feedback != '':
+            if feedback != '':
                 self.reviews_worksheet.update_cell(row_index, 4, feedback)
                 logger.info(f"Feedback review с id={review_id} обновлён")
-            elif score != -1:
+            if score != -1:
                 self.reviews_worksheet.update_cell(row_index, 5, score)
                 logger.info(f"Score review с id={review_id} обновлён")
-            return True
 
+            return True
         except Exception as e:
             logger.error(f"Ошибка обновления review: {e}")
             return False
-
-
-
 
 _sheets_service = None
 
