@@ -118,7 +118,6 @@ class SheetsService:    #возможно стоит сделать асинхр
     # ?возможно надо добавить разброс оценок
     # ?возможно стоит добавить увеличивать number_of_reviewers и для первого режима
 
-    #сейчас возвращает bool, но при надобности можно переделать под возврат dict и т.д.
     def get_aggregated_result(self, telegram_id: int, n: int) -> list | bool:
         """
         Ищет подходящие N review, удаляет их из листа review, вычисляет
@@ -224,6 +223,8 @@ class SheetsService:    #возможно стоит сделать асинхр
         except Exception as e:
             logger.error(f"Ошибка получения submission_id: {e}")
 
+    #стоит разделить на 2 метода для получения в порядке очереди и для получения по id, чтобы не менять статус
+    #при получении по id
     def get_submission(self, submission_id=None) -> dict | None:
         """
         Получить not_solved submission в порядке очереди,
