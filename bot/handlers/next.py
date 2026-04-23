@@ -19,7 +19,7 @@ def get_review_keyboard(submission_id: int) -> InlineKeyboardMarkup:
     """inline-кнопки для работы с ревью"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✍️ Написать ревью", callback_data=f"write_feedback_{submission_id}")],
-        [InlineKeyboardButton(text="⏭️ Пропустить работу", callback_data=f"skip_{submission_id}")],
+        [InlineKeyboardButton(text="❌ Отменить проверку", callback_data=f"cancel_review_{submission_id}")],
     ])
 
 
@@ -43,8 +43,6 @@ async def next_message(message: Message, state: FSMContext):
     student_id = submission.get("Student_ID","")
     file_link = submission.get("File_link","Не указана")
 
-    #TODO: Если другой эксперт пропускает работу, то из Reviews удаляется запись об этой работе (часть с реализацией inline кнопки _skip)
-
     # Сохраняем данные в state
     await state.update_data(
         submission_id=submission_id,
@@ -64,8 +62,6 @@ async def next_message(message: Message, state: FSMContext):
     student_info = ""
     if student_id:
         student_info = f"👤 Студент: ID `{student_id}`\n"
-
-    #TODO: прописать логику пропуска работ и добавления ревью (лучше inline кнопками)
 
     await message.answer(
         f"**НОВАЯ РАБОТА #{submission_id}**\n\n"
@@ -190,4 +186,36 @@ async def handle_score(message: Message, state: FSMContext):
 
     await state.clear()
 
-#TODO: Прописать логику Callback _skip и /cancel
+#нужен ли метод для _skip????
+
+@router.callback_query(F.data.startswith("cancel_review_"))
+async def cancel_review(callback: CallbackQuery, state: FSMContext):
+    """Отмена проверки через inline-кнопку"""
+
+    try:
+        submission_id = int(callback.data.split("_")[2])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Ошибка", show_alert=True)
+        return
+
+    reviewer_id = callback.from_user.id
+    sheets = get_sheets_service()
+
+    if sheets:
+        review_id = sheets.get_review_id(submission_id, reviewer_id)
+        if review_id:
+            sheets.delete_review(review_id)
+            sheets.update_submission(submission_id, new_status='not_solved')
+
+    await state.clear()
+
+    try:
+        await callback.message.delete()
+    except:
+        await callback.message.edit_text("🔸 Проверка отменена")
+
+    await callback.answer("🔸 Отменено", show_alert=False)
+    await callback.message.answer(
+        "🔸 Проверка отменена.\nИспользуйте /next чтобы взять другую работу.",
+        parse_mode="Markdown"
+    )
