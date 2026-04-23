@@ -296,7 +296,7 @@ class SheetsService:    #возможно стоит сделать асинхр
                 row_index += 1
                 number_of_reviewers = int(str(record.get("Number_of_reviewers")))
                 student_id = int(str(record.get("Student_ID")))
-                if number_of_reviewers == n or student_id == asker_tg_id or str(record.get("Status")=='redacting'):
+                if number_of_reviewers == n or student_id == asker_tg_id:
                     continue
                 count += 1
                 if count > n:
