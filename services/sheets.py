@@ -1,7 +1,6 @@
 import gspread
 from google.oauth2.service_account import Credentials
 from gspread import worksheet
-from pip._internal.operations import check
 
 from config import GOOGLE_SHEET_ID, GOOGLE_CREDENTIALS_PATH
 import logging
@@ -119,6 +118,8 @@ class SheetsService:    #возможно стоит сделать асинхр
     # ?возможно надо добавить разброс оценок
     # ?возможно стоит добавить увеличивать number_of_reviewers и для первого режима
 
+    #чтобы не удалять review из таблицы можно добавить статусы
+    #удаление строк можно заменить на метод delete_reviews
     def get_aggregated_result(self, telegram_id: int, n: int) -> list | bool:
         """
         Ищет подходящие N review, удаляет их из листа review, вычисляет
@@ -196,10 +197,7 @@ class SheetsService:    #возможно стоит сделать асинхр
             return False
         try:
             submission_id = self._generate_id(self.submissions_worksheet)
-            status = "redacting"
-
-            if student_name != '' and file_link != '':
-                status = "not_solved"
+            status = "not_solved"
 
             from datetime import datetime
             self.submissions_worksheet.append_row([
@@ -344,14 +342,19 @@ class SheetsService:    #возможно стоит сделать асинхр
             logger.error(f"Ошибка обновления submission: {e}")
             return False
 
+    #добавил изменение n_of_rev
     def add_review(self, submission_id: int, reviewer_id: int, feedback: str='none', score: int=-1) -> bool:
-        """Добавить review"""
+        """
+        Добавить review.
+        Обновляет Number_of_reviewers у submission
+        """
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
             return False
         try:
             review_id = self._generate_id(self.reviews_worksheet)
-
+            subm = self.get_submission_by_id(submission_id)
+            self.update_submission(submission_id, n_of_rev=(int(subm["Number_of_reviewers"])) + 1)
             from datetime import datetime
             self.reviews_worksheet.append_row([
                 review_id,
@@ -408,7 +411,7 @@ class SheetsService:    #возможно стоит сделать асинхр
         try:
             cell = self.reviews_worksheet.find(str(review_id), in_column=1)
             subm_id = self.reviews_worksheet.cell(cell.row, 2).value
-            subm = self.get_submission(int(subm_id))
+            subm = self.get_submission_by_id(int(subm_id))
             self.update_submission(int(subm_id), n_of_rev=(subm["Number_of_reviewers"]) - 1)
             self.reviews_worksheet.delete_rows(cell.row)
             return True
