@@ -275,8 +275,7 @@ class SheetsService:    #возможно стоит сделать асинхр
         except Exception as e:
             logger.error(f"Ошибка получения submission по id: {e}")
 
-    # возможно стоит убрать логику обновления number_of_reviewers
-    # просто проходится по записям и сравнивать n
+    # убрал логику обновления number_of_reviewers
     def get_n_submissions(self, asker_tg_id: int, n: int) -> list | None:
         """
         Получить n-ное количество работ, при нехватке работ возвращается список из тех, что есть
@@ -301,7 +300,6 @@ class SheetsService:    #возможно стоит сделать асинхр
                 count += 1
                 if count > n:
                     break
-                self.submissions_worksheet.update_cell(row_index, 7, number_of_reviewers + 1)
                 submissions.append(record)
             return submissions
         except Exception as e:
