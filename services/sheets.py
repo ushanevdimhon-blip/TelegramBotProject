@@ -190,6 +190,22 @@ class SheetsService:    #возможно стоит сделать асинхр
             logger.error(f"Ошибка получения submission: {e}")
             return None
 
+    def get_submission_by_id(self, submission_id: int) -> dict | None:
+        """
+            Получить submission по id.
+            Не меняет статус
+        """
+        if self.submissions_worksheet is None:
+            logger.error(f"self.submissions_worksheet is None")
+            return None
+        try:
+            all_records = self.submissions_worksheet.get_all_records()
+            for record in all_records:
+                if int(record.get('ID', 0)) == submission_id:
+                    return record
+        except Exception as e:
+            logger.error(f"Ошибка получения submission по id: {e}")
+
     def update_submission(self, submission_id: int, file_link: str='', new_status: str='') -> bool:
         """
         Опционально обновить статус и/или file_link submission по ID.
@@ -280,6 +296,22 @@ class SheetsService:    #возможно стоит сделать асинхр
                     return record
         except Exception as e:
             logger.error(f"Ошибка получения review: {e}")
+
+    # возможно стоит убрать логику обновления number_of_reviewers
+    def delete_review(self, review_id: int) -> bool:
+        if self.reviews_worksheet is None:
+            logger.error(f"self.reviews_worksheet is None")
+            return False
+        try:
+            cell = self.reviews_worksheet.find(str(review_id), in_column=1)
+            subm_id = self.reviews_worksheet.cell(cell.row, 2).value
+            subm = self.get_submission_by_id(int(subm_id))
+            self.update_submission(int(subm_id))
+            self.reviews_worksheet.delete_rows(cell.row)
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка удаления review: {e}")
+            return False
 
     def update_review(self, review_id: int, feedback: str='', score: int=-1) -> bool:
         """
