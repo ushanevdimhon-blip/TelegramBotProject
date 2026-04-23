@@ -49,6 +49,7 @@ async def cmd_start(message: Message, state: FSMContext):
             f"Вы уже зарегистрированы.\n"
             f"Ваша роль - {role}\n"
             f"Используйте /submit чтобы загрузить работу.\n"
+            f"Используйте /next чтобы получить работу. \n\n"
             f"Используйте /help чтобы получить справку по доступным командам\n"
         )
         await state.clear()
