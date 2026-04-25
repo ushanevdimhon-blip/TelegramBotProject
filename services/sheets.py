@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 class SheetsService:    #возможно стоит сделать асинхронным - вызовы в отдельном потоке
     """Сервис для работы с Google Таблицами"""
-
     def __init__(self):
         self._reviews_worksheet = None
         self._submissions_worksheet = None
@@ -59,8 +58,15 @@ class SheetsService:    #возможно стоит сделать асинхр
             self._reviews_worksheet = self.get_worksheet('Reviews')
         return self._reviews_worksheet
 
-    def add_user(self, telegram_id: int, username: str, user_full_name: str, role: str = 'student') -> bool:
-        """Добавить пользователя в таблицу"""
+    def add_user(self, telegram_id: int, username: str, user_full_name: str, role: str = '') -> bool:
+        """
+        Добавить пользователя в таблицу
+        :param telegram_id: telegram ID пользователя
+        :param username: telegram username пользователя
+        :param user_full_name: ФИО пользователя
+        :param role: роль пользователя
+        :return: удалось/не удалось добавить пользователя
+        """
         if self.users_worksheet is None:
             logger.error(f"self.users_worksheet is None")
             return False
@@ -87,7 +93,11 @@ class SheetsService:    #возможно стоит сделать асинхр
             return False
 
     def get_user(self, telegram_id: int) -> dict | None:
-        """Получить пользователя по Telegram ID"""
+        """
+        Получить пользователя по telegram ID
+        :param telegram_id: telegram ID пользователя
+        :return: Словарь с данными о пользователе. В случае неудачи None
+        """
         if self.users_worksheet is None:
             logger.error(f"self.users_worksheet is None")
             return None
@@ -98,15 +108,15 @@ class SheetsService:    #возможно стоит сделать асинхр
                     return record
             return None
         except Exception as e:
-            logger.error(f"Ошибка получения пользователя: {e}")
+            logger.error(f"Ошибка получения данных пользователя: {e}")
             return None
 
     @staticmethod
     def _generate_id(worksheet) -> int:
         """
         метод для генерации нового уникального ID.
-        Берёт максимальное значение ID из первого столбца и прибавляет 1.
-        Если записей ещё нет — возвращает 1.
+        :return: Уникальный ID.
+                Если записей ещё нет — возвращает 1.
         """
         rows = worksheet.get_all_values()
         if len(rows) > 1:
@@ -115,20 +125,93 @@ class SheetsService:    #возможно стоит сделать асинхр
         else:
             return 1
 
-    def add_submission(self, telegram_id: int, student_name: str='', file_link: str='') -> bool:
+    #TODO: рефакторинг: добавить подписи методам, изменить уже существующие: params & returns
+    # ?возможно надо добавить разброс оценок
+    # ?возможно стоит добавить увеличивать number_of_reviewers и для первого режима
+
+    #чтобы не удалять review из таблицы можно добавить статусы
+    #удаление строк можно заменить на метод delete_reviews
+    def get_aggregated_result(self, telegram_id: int, n: int) -> list | None:
         """
-        Добавить submission по Telegram ID или по ФИО студента, также можно добавить ссылку на файл
-        При добавлении чего-то одного нужно явно указать, что именно(student_name=...)
+        Ищет подходящие N review, удаляет их из листа review, вычисляет
+        средний балл и формирует список result из словарей результатов
+        :param telegram_id: id студента
+        :param n: число N для второго режима, задаваемое организатором
+        :return: Список словарей результатов. В случае неудачи None.
+        """
+        if self.reviews_worksheet is None:
+            logger.error(f"self.reviews_worksheet is None")
+            return None
+        if not self.check(telegram_id, n):
+            return None
+        submission_id = self.get_submission_id(telegram_id)
+        scores = []
+        reviewers = []
+        feedbacks = []
+        rows_to_delete = []
+        result = []
+        try:
+            cells = self.reviews_worksheet.findall(str(submission_id), in_column=2)
+            for cell in cells:
+                scores.append(int(str(self.reviews_worksheet.cell(cell.row, 5).value)))
+                reviewers.append(str(self.reviews_worksheet.cell(cell.row, 3).value))
+                feedbacks.append(str(self.reviews_worksheet.cell(cell.row, 4).value))
+                rows_to_delete.append(cell.row)
+            middle_score = sum(scores) / len(scores)
+            for i in range(0,n):
+                result.append({
+                    "Reviewer_ID": reviewers[i],
+                    "Student_ID": telegram_id,
+                    "Feedback": feedbacks[i],
+                    "Score": scores[i],
+                    "Middle_score": middle_score
+                    }
+                )
+            for row in sorted(rows_to_delete, reverse=True):
+                self.reviews_worksheet.delete_rows(row)
+            return result
+        except Exception as e:
+            logger.error(f"Не удалось получить результат для {telegram_id}: {e}")
+            return None
+
+    def check(self, telegram_id: int, n: int) -> bool:
+        """
+        Находит все подходящие review по тг id и проверяет равно ли количество готовых review N
+        :param telegram_id: id студента
+        :param n: число N для второго режима, задаваемое организатором
+        :return: bool
+        """
+        if self.reviews_worksheet is None:
+            logger.error(f"self.reviews_worksheet is None")
+            return False
+        try:
+            submission_id = self.get_submission_id(telegram_id)
+            cells = self.reviews_worksheet.findall(str(submission_id), in_column=2)
+            if len(cells) != n: return False
+            for cell in cells:
+                review_id = self.reviews_worksheet.cell(cell.row, 1).value
+                review = self.get_review(int(review_id))
+                if review["Feedback"] == "none" or review["Score"] == "-1":
+                    return False
+            return True
+        except Exception as e:
+            logger.error(f"Не удалось выполнить проверку для {telegram_id}: {e}")
+            return False
+
+    def add_submission(self, telegram_id: int, student_name: str, file_link: str) -> bool:
+        """
+        Добавить submission.
+        :param telegram_id: telegram ID студента
+        :param student_name: ФИО студента
+        :param file_link: ссылка на файл с работой студента
+        :return: удалось/не удалось добавить submission
         """
         if self.submissions_worksheet is None:
             logger.error(f"self.submissions_worksheet is None")
             return False
         try:
             submission_id = self._generate_id(self.submissions_worksheet)
-            status = "redacting"
-
-            if student_name != '' and file_link != '':
-                status = "not_solved"
+            status = "not_solved"
 
             from datetime import datetime
             self.submissions_worksheet.append_row([
@@ -137,16 +220,21 @@ class SheetsService:    #возможно стоит сделать асинхр
                 student_name,
                 file_link,
                 status,
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                0
             ])
-            logger.info(f"submission {submission_id} добавлена")
+            logger.info(f"submission для Telegram ID:{telegram_id} добавлена")
             return True
         except Exception as e:
-            logger.error(f"Ошибка добавления submission: {e}")
+            logger.error(f"Ошибка добавления submission для Telegram ID:{telegram_id}: {e}")
             return False
 
-    def get_submission_id(self, telegram_id: int):
-        """Получить submission ID по telegram ID"""
+    def get_submission_id(self, telegram_id: int) -> int | None:
+        """
+        Получить submission ID.
+        :param telegram_id: telegram ID студента
+        :return: submission ID. В случае неудачи None.
+        """
         if self.submissions_worksheet is None:
             logger.error(f"self.submissions_worksheet is None")
             return None
@@ -154,17 +242,20 @@ class SheetsService:    #возможно стоит сделать асинхр
             cell = self.submissions_worksheet.find(str(telegram_id), in_column=2)
             if cell is not None:
                 submission_id_cell = self.submissions_worksheet.cell(cell.row, 1)
-                return submission_id_cell.value
+                return int(str(submission_id_cell.value))
             else:
-                logger.info(f"Telegram ID {telegram_id} не найден")
+                logger.info(f"Telegram ID: {telegram_id} не найден")
                 return None
         except Exception as e:
-            logger.error(f"Ошибка получения submission_id: {e}")
+            logger.error(f"Ошибка получения submission ID для Telegram ID:{telegram_id}: {e}")
 
     def get_submission(self, submission_id=None) -> dict | None:
         """
         Получить not_solved submission в порядке очереди,
-        либо submission с любым статусом по id
+        либо submission с любым статусом по id.
+        Меняет статус на in_progress.
+        :param submission_id: submission ID
+        :return: Словарь с данными о submission. В случае неудачи None.
         """
         if self.submissions_worksheet is None:
             logger.error(f"self.submissions_worksheet is None")
@@ -183,13 +274,71 @@ class SheetsService:    #возможно стоит сделать асинхр
                     record['Status'] = 'in_progress'
                     return record
         except Exception as e:
-            logger.error(f"Ошибка получения submission: {e}")
+            logger.error(f"Ошибка получения submission для submission_id:{submission_id}: {e}")
             return None
 
-    def update_submission(self, submission_id: int, file_link: str='', new_status: str='') -> bool:
+    def get_submission_by_id(self, submission_id: int) -> dict | None:
         """
-        Опционально обновить статус и/или file_link submission по ID.
+        Получить submission по id.
+        Не меняет статус.
+        :param submission_id: submission ID
+        :return: Словарь с данными о submission. В случае неудачи None.
+        """
+        if self.submissions_worksheet is None:
+            logger.error(f"self.submissions_worksheet is None")
+            return None
+        try:
+            all_records = self.submissions_worksheet.get_all_records()
+            for record in all_records:
+                if int(record.get('ID', 0)) == submission_id:
+                    return record
+        except Exception as e:
+            logger.error(f"Ошибка получения submission для submission_id:{submission_id}: {e}")
+
+    # убрал логику обновления number_of_reviewers
+    # проблема теперь в отклике, т.к. сначала получают submissions, а потом
+    # обновляется number_of_reviewers, при одновременном использовании могут возникнуть проблемы
+    # решить можно еще одним счетчиком(по сути просто еще один number_of_reviewers,
+    # который будет работать, как в прошлой версии)
+    def get_n_submissions(self, asker_tg_id: int, n: int) -> list | None:
+        """
+        Получить n-ное количество работ, при нехватке работ возвращается список из тех, что есть
+        :param asker_tg_id: tg id студента, от которого идет запрос на получение
+        :param n: количество работ
+        :return: список из n submissions
+        """
+        if self.submissions_worksheet is None:
+            logger.error(f"self.submissions_worksheet is None")
+            return None
+        try:
+            all_records = self.submissions_worksheet.get_all_records()
+            submissions = []
+            row_index = 1
+            count = 0
+            for record in all_records:
+                row_index += 1
+                number_of_reviewers = int(str(record.get("Number_of_reviewers")))
+                student_id = int(str(record.get("Student_ID")))
+                if number_of_reviewers == n or student_id == asker_tg_id:
+                    continue
+                count += 1
+                if count > n:
+                    break
+                submissions.append(record)
+            return submissions
+        except Exception as e:
+            logger.error(f"Не удалось получить {n} submissions для telegram ID:{asker_tg_id}: {e}")
+            return None
+
+    def update_submission(self, submission_id: int, file_link: str='', new_status: str='', n_of_rev: int=0) -> bool:
+        """
+        Опционально обновить status и/или file_link и/или number_of_reviewers submission по ID.
         Для обновления чего-то одного необходимо явно указать, что именно(file_link=...).
+        :param submission_id: submission ID
+        :param file_link: ссылка на файл с работой студента
+        :param new_status: новый статус submission
+        :param n_of_rev: количество ревьюеров
+        :return: удалось/не удалось обновить submission
         """
         if self.submissions_worksheet is None:
             logger.error(f"self.submissions_worksheet is None")
@@ -206,45 +355,59 @@ class SheetsService:    #возможно стоит сделать асинхр
                 logger.error(f"Submission с ID {submission_id} не найдена")
                 return False
 
-            if new_status != '' and file_link != '':
-                self.submissions_worksheet.update_cell(row_index, 5, new_status)  # 4 — индекс столбца "Status"
-                self.submissions_worksheet.update_cell(row_index, 4, file_link)  # 3 — индекс столбца "File_link"
-                logger.info(f"Status and File_link submission {submission_id} обновлёны")
-            elif new_status != '':
+            if new_status != '':
                 self.submissions_worksheet.update_cell(row_index, 5, new_status)
-                logger.info(f"Status submission {submission_id} обновлён")
-            elif file_link != '':
+                logger.info(f"Status для submission_id:{submission_id} обновлён")
+            if file_link != '':
                 self.submissions_worksheet.update_cell(row_index, 4, file_link)
-                logger.info(f"Feedback submission {submission_id} обновлён")
+                logger.info(f"Feedback для submission_id:{submission_id} обновлён")
+            if n_of_rev != 0:
+                self.submissions_worksheet.update_cell(row_index, 7, n_of_rev)
+                logger.info(f"n_of_rev для submission_id:{submission_id} обновлён")
             return True
         except Exception as e:
-            logger.error(f"Ошибка обновления submission: {e}")
+            logger.error(f"Ошибка обновления submission для submission_id:{submission_id}: {e}")
             return False
 
-    def add_review(self, submission_id: int, reviewer_id: int) -> bool:
-        """Добавить review по индексу submission и телеграм id проверяющего"""
+    #добавил изменение n_of_rev
+    def add_review(self, submission_id: int, reviewer_id: int, feedback: str='none', score: int=-1) -> bool:
+        """
+        Добавить review.
+        Обновляет Number_of_reviewers у submission.
+        :param submission_id: submission ID
+        :param reviewer_id: telegram ID ревьюера
+        :param feedback: обратная связь от ревьюера
+        :param score: оценка, выставленная ревьюером
+        :return: удалось/не удалось добавить review
+        """
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
             return False
         try:
             review_id = self._generate_id(self.reviews_worksheet)
-
             from datetime import datetime
             self.reviews_worksheet.append_row([
                 review_id,
                 submission_id,
                 reviewer_id,
-                '',
-                -1,
+                feedback,
+                score,
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ])
+            subm = self.get_submission_by_id(submission_id)
+            self.update_submission(submission_id, n_of_rev=(int(subm["Number_of_reviewers"])) + 1)
             return True
         except Exception as e:
-            logger.error(f"ошибка добавления review: {e}")
+            logger.error(f"ошибка добавления review для submission_id:{submission_id}: {e}")
             return False
 
-    def get_review_id(self, submission_id: int, reviewer_id: int=None):
-        """Получить ID review по submission ID или по submission ID и ID проверяющего"""
+    def get_review_id(self, submission_id: int, reviewer_id: int=None) -> int | None:
+        """
+        Получить ID review по submission ID или по submission ID и telegram ID проверяющего.
+        :param submission_id: submission ID
+        :param reviewer_id: telegram ID проверяющего
+        :return: review ID. В случае неудачи None
+        """
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
             return None
@@ -255,17 +418,21 @@ class SheetsService:    #возможно стоит сделать асинхр
                 if row.get('Submission_ID') == submission_id:
                     if reviewer_id is not None:
                         if row.get('Reviewer_ID') == reviewer_id:
-                            return row.get('ID')
+                            return int(str(row.get('ID')))
                         continue
                     else:
-                        return row.get('ID')
+                        return int(str(row.get('ID')))
             return None
         except Exception as e:
-            logger.error(f"Error while getting review_id: {e}")
+            logger.error(f"Не удалось получить review ID для submission_id:{submission_id}: {e}")
             return None
 
     def get_review(self, review_id: int) -> dict | None:
-        """Получить review по его id или по submission id"""
+        """
+        Получить review по review ID.
+        :param review_id: review ID
+        :return: Словарь с данными о review. В случае неудачи None
+        """
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
             return None
@@ -275,12 +442,36 @@ class SheetsService:    #возможно стоит сделать асинхр
                 if int(record.get('ID', 0)) == review_id:
                     return record
         except Exception as e:
-            logger.error(f"Ошибка получения review: {e}")
+            logger.error(f"Ошибка получения review для review_id:{review_id}: {e}")
+
+    def delete_review(self, review_id: int) -> bool:
+        """
+        Удалить review по review ID.
+        :param review_id: review ID
+        :return: удалось/не удалось удалить review
+        """
+        if self.reviews_worksheet is None:
+            logger.error(f"self.reviews_worksheet is None")
+            return False
+        try:
+            cell = self.reviews_worksheet.find(str(review_id), in_column=1)
+            subm_id = self.reviews_worksheet.cell(cell.row, 2).value
+            subm = self.get_submission_by_id(int(subm_id))
+            self.update_submission(int(subm_id), n_of_rev=(subm["Number_of_reviewers"]) - 1)
+            self.reviews_worksheet.delete_rows(cell.row)
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка удаления review для review_id:{review_id}: {e}")
+            return False
 
     def update_review(self, review_id: int, feedback: str='', score: int=-1) -> bool:
         """
         Обновить либо feedback, либо score, либо и то и то.
         Для обновления чего-то одного необходимо явно указать что именно(feedback=...).
+        :param review_id: review ID
+        :param feedback: обратная связь от ревьюера
+        :param score: оценка, выставленная ревьюером
+        :return: удалось/не удалось обновить review
         """
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
@@ -297,24 +488,17 @@ class SheetsService:    #возможно стоит сделать асинхр
                 logger.error(f"Review с ID {review_id} не найдена")
                 return False
 
-            if feedback != '' and score != -1:
-                self.reviews_worksheet.update_cell(row_index, 4, feedback)  # 4 — индекс столбца "Feedback"
-                self.reviews_worksheet.update_cell(row_index, 5, score)  # 5 — индекс столбца "Score"
-                logger.info(f"Feedback and Score review с id={review_id} обновлёны")
-            elif feedback != '':
+            if feedback != '':
                 self.reviews_worksheet.update_cell(row_index, 4, feedback)
                 logger.info(f"Feedback review с id={review_id} обновлён")
-            elif score != -1:
+            if score != -1:
                 self.reviews_worksheet.update_cell(row_index, 5, score)
                 logger.info(f"Score review с id={review_id} обновлён")
+
             return True
-
         except Exception as e:
-            logger.error(f"Ошибка обновления review: {e}")
+            logger.error(f"Ошибка обновления review для review_id:{review_id}: {e}")
             return False
-
-
-
 
 _sheets_service = None
 
