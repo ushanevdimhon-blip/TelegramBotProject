@@ -297,7 +297,12 @@ class SheetsService:    #возможно стоит сделать асинхр
         except Exception as e:
             logger.error(f"Ошибка получения submission по id: {e}")
 
-    def update_submission(self, submission_id: int, file_link: str='', new_status: str='') -> bool:
+    def get_submission_by_id(self, submission_id: int) -> dict | None:
+        """
+        Получить submission по id.
+        Не меняет статус.
+        :param submission_id: submission ID
+        :return: Словарь с данными о submission. В случае неудачи None.
         """
         Получить submission по id.
         Не меняет статус.
