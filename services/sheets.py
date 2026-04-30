@@ -7,13 +7,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class SheetsService:    #возможно стоит сделать асинхронным - вызовы в отдельном потоке
+class SheetsService:
     """Сервис для работы с Google Таблицами"""
     def __init__(self):
         self._reviews_worksheet = None
         self._submissions_worksheet = None
         self._users_worksheet = None
-        self.spreadsheet = None
         try:
             credentials = Credentials.from_service_account_file(
                 GOOGLE_CREDENTIALS_PATH,
@@ -29,9 +28,6 @@ class SheetsService:    #возможно стоит сделать асинхр
 
     def get_worksheet(self, worksheet_name: str):
         """Получить вкладку таблицы (лист) по названию"""
-        if self.spreadsheet is None:
-            logger.error("Google Sheets не инициализирован (проверьте credentials.json)")
-            return None
         try:
             return self.spreadsheet.worksheet(worksheet_name)
         except gspread.WorksheetNotFound:
@@ -283,27 +279,6 @@ class SheetsService:    #возможно стоит сделать асинхр
 
     def get_submission_by_id(self, submission_id: int) -> dict | None:
         """
-            Получить submission по id.
-            Не меняет статус
-        """
-        if self.submissions_worksheet is None:
-            logger.error(f"self.submissions_worksheet is None")
-            return None
-        try:
-            all_records = self.submissions_worksheet.get_all_records()
-            for record in all_records:
-                if int(record.get('ID', 0)) == submission_id:
-                    return record
-        except Exception as e:
-            logger.error(f"Ошибка получения submission по id: {e}")
-
-    def get_submission_by_id(self, submission_id: int) -> dict | None:
-        """
-        Получить submission по id.
-        Не меняет статус.
-        :param submission_id: submission ID
-        :return: Словарь с данными о submission. В случае неудачи None.
-        """
         Получить submission по id.
         Не меняет статус.
         :param submission_id: submission ID
@@ -394,7 +369,7 @@ class SheetsService:    #возможно стоит сделать асинхр
             logger.error(f"Ошибка обновления submission для submission_id:{submission_id}: {e}")
             return False
 
-    #добавил изменение n_of_rev
+    #добавил изменение n_of_rev - возможно стоит вернуть обратно в get_n_subm
     def add_review(self, submission_id: int, reviewer_id: int, feedback: str='none', score: int=-1) -> bool:
         """
         Добавить review.
@@ -487,22 +462,6 @@ class SheetsService:    #возможно стоит сделать асинхр
             return True
         except Exception as e:
             logger.error(f"Ошибка удаления review для review_id:{review_id}: {e}")
-            return False
-
-    # возможно стоит убрать логику обновления number_of_reviewers
-    def delete_review(self, review_id: int) -> bool:
-        if self.reviews_worksheet is None:
-            logger.error(f"self.reviews_worksheet is None")
-            return False
-        try:
-            cell = self.reviews_worksheet.find(str(review_id), in_column=1)
-            subm_id = self.reviews_worksheet.cell(cell.row, 2).value
-            subm = self.get_submission_by_id(int(subm_id))
-            self.update_submission(int(subm_id))
-            self.reviews_worksheet.delete_rows(cell.row)
-            return True
-        except Exception as e:
-            logger.error(f"Ошибка удаления review: {e}")
             return False
 
     def update_review(self, review_id: int, feedback: str='', score: int=-1) -> bool:
