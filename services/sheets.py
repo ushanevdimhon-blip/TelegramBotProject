@@ -369,7 +369,7 @@ class SheetsService:
             logger.error(f"Ошибка обновления submission для submission_id:{submission_id}: {e}")
             return False
 
-    #добавил изменение n_of_rev
+    #добавил изменение n_of_rev - возможно стоит вернуть обратно в get_n_subm
     def add_review(self, submission_id: int, reviewer_id: int, feedback: str='none', score: int=-1) -> bool:
         """
         Добавить review.
