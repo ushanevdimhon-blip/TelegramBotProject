@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class SheetsService:    #возможно стоит сделать асинхронным - вызовы в отдельном потоке
+class SheetsService:
     """Сервис для работы с Google Таблицами"""
     def __init__(self):
         self._reviews_worksheet = None
