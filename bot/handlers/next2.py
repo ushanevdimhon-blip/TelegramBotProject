@@ -23,6 +23,7 @@ def get_peer_review_keyboard(submission_id: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="❌ Отменить", callback_data=f"peer_cancel_{submission_id}")],
     ])
 
+
 @router.message(Command("next2"))
 async def cmd_next2(message: Message, state: FSMContext):
     """
@@ -36,9 +37,9 @@ async def cmd_next2(message: Message, state: FSMContext):
         await message.answer("⚠️ Сервис временно недоступен, попробуйте позже")
         return
 
-    # Получаем работы для проверки (N работ, где N можно настроить)
-    # Пока берём 2 работы за раз
-    submissions = sheets.get_n_submissions(asker_tg_id=student_id, n=2) #Вот это значение можно настроить
+    # ЗНАЧЕНИЕ N ПОТОМ ПОЛУЧАТЬ ИЗ ДАННЫХ ОРГАНИЗАТОРА
+    # получаем работы для проверки (n работ, где n можно настроить)
+    submissions = sheets.get_n_submissions(asker_tg_id=student_id, n=2)
 
     if not submissions or len(submissions) == 0:
         await message.answer(
@@ -48,12 +49,40 @@ async def cmd_next2(message: Message, state: FSMContext):
         )
         return
 
-    #берем первую работу из списка
+    # ФИЛЬТРАЦИЯ: убираем работы, которые студент уже проверял, НЕ УБИРАТЬ
+    reviews_worksheet = sheets.reviews_worksheet
+    if reviews_worksheet:
+        try:
+            all_reviews = reviews_worksheet.get_all_records()
+            # Получаем список submission_id, которые уже проверил этот студент
+            reviewed_ids = [
+                int(str(review.get('Submission_ID')))
+                for review in all_reviews
+                if int(str(review.get('Reviewer_ID', 0))) == student_id
+            ]
+
+            # Фильтруем работы, оставляя только те, которые студент ещё не проверял
+            submissions = [
+                sub for sub in submissions
+                if int(str(sub.get('ID'))) not in reviewed_ids
+            ]
+        except Exception as e:
+            logger.error(f"Ошибка фильтрации проверенных работ: {e}")
+
+    # Если после фильтрации работ не осталось
+    if not submissions or len(submissions) == 0:
+        await message.answer(
+            "🎉 Вы проверили все доступные работы!\n\n"
+            "Пока нет новых работ для проверки."
+        )
+        return
+
+    # Берём первую работу из отфильтрованного списка
     submission = submissions[0]
     submission_id = int(submission.get("ID"))
     file_link = submission.get("File_link", "Не указана")
 
-    #Сохраняем данные в state
+    # Сохраняем данные в state
     await state.update_data(
         submission_id=submission_id,
         student_id=student_id,
@@ -113,7 +142,7 @@ async def handle_peer_feedback(message: Message, state: FSMContext):
     await state.update_data(feedback=feedback)
 
     await message.answer(
-        "✅ **РЕВЬЮ СОХРАНЕНО**\n\n"
+        "📜**РЕВЬЮ СОХРАНЕНО**\n\n"
         "Теперь поставьте **оценку** работе.\n",
         parse_mode="Markdown"
     )
