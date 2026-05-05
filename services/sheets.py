@@ -147,17 +147,20 @@ class SheetsService:
         submission_id = self.get_submission_id(telegram_id)
         scores = []
         reviewers = []
+        reviews_ids = []
         feedbacks = []
-        rows_to_delete = []
         result = []
         try:
             cells = self.reviews_worksheet.findall(str(submission_id), in_column=2)
+
             for cell in cells:
                 scores.append(int(str(self.reviews_worksheet.cell(cell.row, 7).value)))
                 reviewers.append(str(self.reviews_worksheet.cell(cell.row, 3).value))
                 feedbacks.append(str(self.reviews_worksheet.cell(cell.row, 6).value))
-                rows_to_delete.append(cell.row)
+                reviews_ids.append(int(str(self.reviews_worksheet.cell(cell.row, 1).value)))
+
             middle_score = sum(scores) / len(scores)
+
             for i in range(0,n):
                 result.append({
                     "Reviewer_ID": reviewers[i],
@@ -167,8 +170,8 @@ class SheetsService:
                     "Middle_score": middle_score
                     }
                 )
-            for row in sorted(rows_to_delete, reverse=True):
-                self.reviews_worksheet.delete_rows(row)
+                self.update_review(reviews_ids[i], middle_score=middle_score)
+
             return result
         except Exception as e:
             logger.error(f"Не удалось получить результат для {telegram_id}: {e}")
