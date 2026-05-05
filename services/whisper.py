@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 class WhisperService:
     def __init__(self):
         self.model = model = WhisperModel(MODEL_NAME, device="cpu", compute_type="int8")
+        self._lock = asyncio.Lock()
 
     async def extract(self, file_id: str) -> str | None:
         try:
@@ -18,12 +19,13 @@ class WhisperService:
             await bot.download_file(file.file_path, destination=audio_data)
             audio_data.seek(0)
 
-            segments, info = await asyncio.to_thread(
+            async with self._lock:
+                segments, info = await asyncio.to_thread(
                 self.model.transcribe,
                 audio=audio_data,
                 language="ru",
                 beam_size=5
-            )
+                )
 
             recognized_text = " ".join([segment.text for segment in segments])
             return recognized_text
