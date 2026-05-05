@@ -374,7 +374,7 @@ class SheetsService:
             return False
 
     #добавил изменение n_of_rev - возможно стоит вернуть обратно в get_n_subm
-    def add_review(self, submission_id: int, reviewer_id: int, feedback: str='none', score: int=-1, middle_score: int | None=None) -> bool:
+    def add_review(self, submission_id: int, reviewer_id: int, feedback: str='none', score: int=-1, middle_score: int | str="") -> bool:
         """
         Добавить review.
         Обновляет Number_of_reviewers у submission.
@@ -400,7 +400,7 @@ class SheetsService:
                 rev_full_name,
                 feedback,
                 score,
-                "" if middle_score is None else middle_score,
+                middle_score,
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ])
             subm = self.get_submission_by_id(submission_id)
