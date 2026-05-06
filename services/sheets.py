@@ -147,17 +147,20 @@ class SheetsService:
         submission_id = self.get_submission_id(telegram_id)
         scores = []
         reviewers = []
+        reviews_ids = []
         feedbacks = []
-        rows_to_delete = []
         result = []
         try:
             cells = self.reviews_worksheet.findall(str(submission_id), in_column=2)
+
             for cell in cells:
-                scores.append(int(str(self.reviews_worksheet.cell(cell.row, 5).value)))
+                scores.append(int(str(self.reviews_worksheet.cell(cell.row, 7).value)))
                 reviewers.append(str(self.reviews_worksheet.cell(cell.row, 3).value))
-                feedbacks.append(str(self.reviews_worksheet.cell(cell.row, 4).value))
-                rows_to_delete.append(cell.row)
+                feedbacks.append(str(self.reviews_worksheet.cell(cell.row, 6).value))
+                reviews_ids.append(int(str(self.reviews_worksheet.cell(cell.row, 1).value)))
+
             middle_score = sum(scores) / len(scores)
+
             for i in range(0,n):
                 result.append({
                     "Reviewer_ID": reviewers[i],
@@ -167,8 +170,8 @@ class SheetsService:
                     "Middle_score": middle_score
                     }
                 )
-            for row in sorted(rows_to_delete, reverse=True):
-                self.reviews_worksheet.delete_rows(row)
+                self.update_review(reviews_ids[i], middle_score=middle_score)
+
             return result
         except Exception as e:
             logger.error(f"Не удалось получить результат для {telegram_id}: {e}")
@@ -330,6 +333,7 @@ class SheetsService:
             logger.error(f"Не удалось получить {n} submissions для telegram ID:{asker_tg_id}: {e}")
             return None
 
+    #возможно стоит добавить изменение времени для противодействия изменения после дд
     def update_submission(self, submission_id: int, file_link: str='', new_status: str='', n_of_rev: int=0) -> bool:
         """
         Опционально обновить status и/или file_link и/или number_of_reviewers submission по ID.
@@ -370,7 +374,7 @@ class SheetsService:
             return False
 
     #добавил изменение n_of_rev - возможно стоит вернуть обратно в get_n_subm
-    def add_review(self, submission_id: int, reviewer_id: int, feedback: str='none', score: int=-1) -> bool:
+    def add_review(self, submission_id: int, reviewer_id: int, feedback: str='none', score: int=-1, middle_score: int | str="") -> bool:
         """
         Добавить review.
         Обновляет Number_of_reviewers у submission.
@@ -385,13 +389,18 @@ class SheetsService:
             return False
         try:
             review_id = self._generate_id(self.reviews_worksheet)
+            stud_full_name = self.get_submission_by_id(submission_id)["Student_name"]
+            rev_full_name = self.get_user(reviewer_id)["user_full_name"]
             from datetime import datetime
             self.reviews_worksheet.append_row([
                 review_id,
                 submission_id,
                 reviewer_id,
+                stud_full_name,
+                rev_full_name,
                 feedback,
                 score,
+                middle_score,
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ])
             subm = self.get_submission_by_id(submission_id)
@@ -464,7 +473,7 @@ class SheetsService:
             logger.error(f"Ошибка удаления review для review_id:{review_id}: {e}")
             return False
 
-    def update_review(self, review_id: int, feedback: str='', score: int=-1) -> bool:
+    def update_review(self, review_id: int, feedback: str='', score: int=-1, middle_score: float | None=None) -> bool:
         """
         Обновить либо feedback, либо score, либо и то и то.
         Для обновления чего-то одного необходимо явно указать что именно(feedback=...).
@@ -489,11 +498,14 @@ class SheetsService:
                 return False
 
             if feedback != '':
-                self.reviews_worksheet.update_cell(row_index, 4, feedback)
+                self.reviews_worksheet.update_cell(row_index, 6, feedback)
                 logger.info(f"Feedback review с id={review_id} обновлён")
             if score != -1:
-                self.reviews_worksheet.update_cell(row_index, 5, score)
+                self.reviews_worksheet.update_cell(row_index, 7, score)
                 logger.info(f"Score review с id={review_id} обновлён")
+            if middle_score is not None:
+                self.reviews_worksheet.update_cell(row_index, 8, middle_score)
+                logger.info(f"Middle_score review с id={review_id} обновлён")
 
             return True
         except Exception as e:
