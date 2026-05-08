@@ -99,7 +99,7 @@ async def handle_feedback_text(message: Message, state: FSMContext):
 
         if not whisper:
             await message.answer("Распознавание голосовых сообщений"
-                                 " временно недоступно 🥺, вы можете отправить текст")
+                " временно недоступно 🥺, вы можете отправить текст")
             return
         feedback = await whisper.extract(message.voice.file_id)
 
@@ -129,7 +129,7 @@ async def handle_feedback_text(message: Message, state: FSMContext):
         await state.update_data(feedback=feedback)
 
         await message.answer(
-            "✅ **РЕВЬЮ СОХРАНЕНО**\n\n"
+            "⭐ **РЕВЬЮ СОХРАНЕНО**\n\n"
             "Теперь поставьте **оценку** работе.\n\n",
             parse_mode="Markdown"
         )
@@ -196,8 +196,6 @@ async def handle_score(message: Message, state: FSMContext):
         logger.error(f"Не удалось сохранить оценку для работы #{submission_id}")
 
     await state.clear()
-
-#нужен ли метод для _skip????
 
 @router.callback_query(F.data.startswith("cancel_review_"))
 async def cancel_review(callback: CallbackQuery, state: FSMContext):
