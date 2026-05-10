@@ -316,17 +316,14 @@ class SheetsService:
         try:
             all_records = self.submissions_worksheet.get_all_records()
             submissions = []
-            row_index = 1
-            count = 0
+            all_records.sort(key=lambda r: int(str(r.get("Number_of_reviewers"))))
             for record in all_records:
-                row_index += 1
+                if len(submissions) == n:
+                    break
                 number_of_reviewers = int(str(record.get("Number_of_reviewers")))
                 student_id = int(str(record.get("Student_ID")))
                 if number_of_reviewers == n or student_id == asker_tg_id:
                     continue
-                count += 1
-                if count > n:
-                    break
                 submissions.append(record)
             return submissions
         except Exception as e:
