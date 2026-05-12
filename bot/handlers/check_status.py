@@ -46,7 +46,7 @@ async def cmd_check1(message: Message):
         "redacting": "📝 Черновик"
     }.get(status, f"Неизвестный статус ({status})")
 
-    reviews = get_reviews_for_submission(sheets, submission_id)
+    reviews = sheets.get_reviews_for_submission(submission_id)
 
     text = (
         f"📋 **СТАТУС ВАШЕЙ РАБОТЫ**\n\n"
@@ -118,40 +118,3 @@ async def cmd_check1(message: Message):
     )
 
     await message.answer(text, parse_mode="Markdown")
-
-
-def get_reviews_for_submission(sheets, submission_id: int) -> list:
-    """
-    Получить все ревью для работы.
-    :param sheets: экземпляр SheetsService
-    :param submission_id: ID работы
-    :return: список ревью
-    """
-    try:
-        reviews_worksheet = sheets.reviews_worksheet
-        if not reviews_worksheet:
-            return []
-
-        all_reviews = reviews_worksheet.get_all_records()
-        submission_reviews = []
-
-        for review in all_reviews:
-            review_submission_id_raw = review.get("Submission_ID", 0)
-
-            try:
-                review_submission_id = int(str(review_submission_id_raw)) if review_submission_id_raw else 0
-            except (ValueError, TypeError):
-                continue
-
-            if review_submission_id == submission_id:
-                submission_reviews.append({
-                    "Feedback": review.get("Feedback", "Нет текста"),
-                    "Score": review.get("Score", "-1"),
-                    "Reviewer_ID": review.get("Reviewer_ID", "unknown"),
-                    "Created_at": review.get("Created_at", "")
-                })
-
-        return submission_reviews
-    except Exception as e:
-        logger.error(f"Ошибка получения ревью для submission_id:{submission_id}: {e}")
-        return []
