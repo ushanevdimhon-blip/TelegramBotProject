@@ -1,3 +1,4 @@
 from .sheets import SheetsService
+from .whisper import WhisperService
 
-__all__ = ['SheetsService'] #Что можем импортировать отсюда
+__all__ = ['SheetsService', 'WhisperService'] #Что можем импортировать отсюда

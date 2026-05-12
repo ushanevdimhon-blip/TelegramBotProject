@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from bot import dp, bot
-from bot.handlers import start, help, info, next, submit, next2
+from bot.handlers import start, help, info, next, submit, next2, check_status
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO) #сохраняем логи на будущее (с уровня INFO и выше)
@@ -17,6 +17,7 @@ async def main():
     dp.include_router(next.router)
     dp.include_router(submit.router)
     dp.include_router(next2.router)
+    dp.include_router(check_status.router)
 
     # Запускаем polling
     print("Бот запущен...")

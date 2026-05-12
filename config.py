@@ -19,6 +19,8 @@ PROXY_PORT = os.getenv("PROXY_PORT")
 GOOGLE_SHEET_ID = os.getenv('GOOGLE_SHEET_ID', '')
 GOOGLE_CREDENTIALS_PATH = os.path.join(BASE_DIR, 'credentials.json')
 
+MODEL_NAME = os.getenv('MODEL_NAME')
+
 # Пароли для регистрации
 ORGANIZER_PASSWORD = os.getenv('ORGANIZER_PASSWORD', '')
 EXPERT_PASSWORD = os.getenv('EXPERT_PASSWORD', '')

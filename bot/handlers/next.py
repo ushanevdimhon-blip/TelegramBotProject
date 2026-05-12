@@ -1,14 +1,14 @@
-from aiogram import Router, F
+from aiogram import Router, F, types
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from services.sheets import get_sheets_service
+from services.whisper import get_whisper_service
 import logging
 
 logger = logging.getLogger(__name__)
 router = Router()
-
 
 class ReviewState(StatesGroup):
     """Состояния для процесса проверки работ"""
@@ -90,11 +90,22 @@ async def start_write_feedback(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 #Обработка текста ревью
-@router.message(ReviewState.waiting_for_feedback, F.text)
+@router.message(ReviewState.waiting_for_feedback, F.text | F.voice)
 async def handle_feedback_text(message: Message, state: FSMContext):
     """Получили текст - сохранили - просим оценку"""
 
-    feedback = message.text.strip()
+    if message.voice:
+        whisper = get_whisper_service()
+
+        if not whisper:
+            await message.answer("Распознавание голосовых сообщений"
+                " временно недоступно 🥺, вы можете отправить текст")
+            return
+        feedback = await whisper.extract(message.voice.file_id)
+
+    if message.text:
+        feedback = message.text.strip()
+
     data = await state.get_data()
     submission_id = data.get("submission_id")
     reviewer_id = data.get("reviewer_id")
@@ -118,7 +129,7 @@ async def handle_feedback_text(message: Message, state: FSMContext):
         await state.update_data(feedback=feedback)
 
         await message.answer(
-            "✅ **РЕВЬЮ СОХРАНЕНО**\n\n"
+            "⭐ **РЕВЬЮ СОХРАНЕНО**\n\n"
             "Теперь поставьте **оценку** работе.\n\n",
             parse_mode="Markdown"
         )
@@ -185,8 +196,6 @@ async def handle_score(message: Message, state: FSMContext):
         logger.error(f"Не удалось сохранить оценку для работы #{submission_id}")
 
     await state.clear()
-
-#нужен ли метод для _skip????
 
 @router.callback_query(F.data.startswith("cancel_review_"))
 async def cancel_review(callback: CallbackQuery, state: FSMContext):
