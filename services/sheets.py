@@ -125,25 +125,18 @@ class SheetsService:
         else:
             return 1
 
-    #TODO: рефакторинг: добавить подписи методам, изменить уже существующие: params & returns
-    # ?возможно надо добавить разброс оценок
-    # ?возможно стоит добавить увеличивать number_of_reviewers и для первого режима
+    #TODO: ?возможно надо добавить разброс оценок
 
-    #чтобы не удалять review из таблицы можно добавить статусы
-    #удаление строк можно заменить на метод delete_reviews
-    def get_aggregated_result(self, telegram_id: int, n: int) -> list | None:
+    def get_aggregated_result(self, telegram_id: int) -> list | None:
         """
-        Ищет подходящие N review, удаляет их из листа review, вычисляет
-        средний балл и формирует список result из словарей результатов
-        :param telegram_id: id студента
-        :param n: число N для второго режима, задаваемое организатором
+        Ищет подходящие review, вычисляет средний балл, грузит в табличку.
+        :param telegram_id: ID студента
         :return: Список словарей результатов. В случае неудачи None.
         """
         if self.reviews_worksheet is None:
             logger.error(f"self.reviews_worksheet is None")
             return None
-        if not self.check(telegram_id, n):
-            return None
+
         submission_id = self.get_submission_id(telegram_id)
         scores = []
         reviewers = []
@@ -161,7 +154,7 @@ class SheetsService:
 
             middle_score = sum(scores) / len(scores)
 
-            for i in range(0,n):
+            for i in range(len(cells)):
                 result.append({
                     "Reviewer_ID": reviewers[i],
                     "Student_ID": telegram_id,
@@ -193,7 +186,7 @@ class SheetsService:
             if len(cells) != n: return False
             for cell in cells:
                 review_id = self.reviews_worksheet.cell(cell.row, 1).value
-                review = self.get_review(int(review_id))
+                review = self.get_review(int(str(review_id)))
                 if review["Feedback"] == "none" or review["Score"] == "-1":
                     return False
             return True
@@ -449,6 +442,41 @@ class SheetsService:
                     return record
         except Exception as e:
             logger.error(f"Ошибка получения review для review_id:{review_id}: {e}")
+
+    def get_reviews_for_submission(self, submission_id: int) -> list:
+        """
+        Получить все ревью для работы.
+        :param submission_id: ID работы
+        :return: список ревью
+        """
+        try:
+            reviews_worksheet = self.reviews_worksheet
+            if not reviews_worksheet:
+                return []
+
+            all_reviews = reviews_worksheet.get_all_records()
+            submission_reviews = []
+
+            for review in all_reviews:
+                review_submission_id_raw = review.get("Submission_ID", 0)
+
+                try:
+                    review_submission_id = int(str(review_submission_id_raw)) if review_submission_id_raw else 0
+                except (ValueError, TypeError):
+                    continue
+
+                if review_submission_id == submission_id:
+                    submission_reviews.append({
+                        "Feedback": review.get("Feedback", "Нет текста"),
+                        "Score": review.get("Score", "-1"),
+                        "Reviewer_ID": review.get("Reviewer_ID", "unknown"),
+                        "Created_at": review.get("Created_at", "")
+                    })
+
+            return submission_reviews
+        except Exception as e:
+            logger.error(f"Ошибка получения ревью для submission_id:{submission_id}: {e}")
+            return []
 
     def delete_review(self, review_id: int) -> bool:
         """
