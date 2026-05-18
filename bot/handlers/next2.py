@@ -222,9 +222,6 @@ async def handle_peer_score(message: Message, state: FSMContext):
             f"Используйте /next2 чтобы проверить следующую работу.",
             parse_mode="Markdown"
         )
-        submission = sheets.get_submission_by_id(submission_id)
-        target_student_id = int(str(submission.get("Student_ID", 0)))
-        aggregated = sheets.get_aggregated_result(target_student_id)
         logger.info(f"Студент {reviewer_id} проверил работу #{submission_id} (оценка: {score})")
     else:
         await message.answer("❌ Не удалось сохранить оценку")
