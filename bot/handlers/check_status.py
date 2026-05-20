@@ -46,8 +46,6 @@ async def cmd_check1(message: Message):
         "redacting": "📝 Черновик"
     }.get(status, f"Неизвестный статус ({status})")
 
-    reviews = sheets.get_reviews_for_submission(submission_id)
-
     text = (
         f"📋 **СТАТУС ВАШЕЙ РАБОТЫ**\n\n"
         f"📝 ID работы: `#{submission_id}`\n"
@@ -56,65 +54,72 @@ async def cmd_check1(message: Message):
         f"👥 Проверок: {number_of_reviewers}\n\n"
     )
 
-    if reviews and len(reviews) > 0:
-        # ОПРЕДЕЛЯЕМ РЕЖИМ ПО КОЛИЧЕСТВУ РЕВЬЮ
-        if len(reviews) == 1:
-            # 1 РЕВЬЮ - ПЕРВЫЙ РЕЖИМ
-            review = reviews[0]
-            feedback = review.get("Feedback", "Нет текста")
-            score = review.get("Score", "-1")
+    aggregated_results = sheets.get_aggregated_result(student_id)
 
-            text += "📄 **ОБРАТНАЯ СВЯЗЬ**:\n\n"
+    # если есть агрегированные результаты
+    if aggregated_results and len(aggregated_results) > 0:
+
+        text += (
+            f"🎉 **РАБОТА ПРОВЕРЕНА!**\n\n"
+            f"📄 **ОБРАТНАЯ СВЯЗЬ** ({len(aggregated_results)} проверок):\n\n"
+        )
+
+        scores = []
+        for i, result in enumerate(aggregated_results, 1):
+            feedback = result.get("Feedback", "Нет текста")
+            score = result.get("Score", "-1")
+
+            if score and score != "-1":
+                try:
+                    scores.append(int(score))
+                except ValueError:
+                    pass
+
+            text += f"**Проверка #{i}**\n"
 
             if score and score != "-1":
                 text += f"⭐ Оценка: {score}\n"
 
             if feedback and feedback != "none":
-                text += f"📝 Ревью: {feedback}\n"
-            else:
-                text += "⏳ Ревью ещё не заполнено\n"
+                feedback_text = feedback[:150] + ('...' if len(feedback) > 150 else '')
+                text += f"📝 Ревью: {feedback_text}\n"
 
-        else:
-            # 2 РЕЖИМ
-            scores = []
+            text += "\n"
+
+        if scores:
+            average_score = sum(scores) / len(scores)
+            text += (
+                f"📊 **СРЕДНИЙ БАЛЛ: {average_score:.2f}**\n"
+            )
+
+        text += "Ревью сохранены в таблице с обновлённым средним баллом.\n"
+
+        # Если нет агрег.рез. Показываем текущие
+    else:
+        reviews = sheets.get_reviews_for_submission(submission_id)
+
+        if reviews and len(reviews) > 0:
             text += f"📄 **ОБРАТНАЯ СВЯЗЬ** ({len(reviews)} проверок):\n\n"
 
             for i, review in enumerate(reviews, 1):
                 feedback = review.get("Feedback", "Нет текста")
                 score = review.get("Score", "-1")
 
-                # Собираем оценки для среднего
-                if score and score != "-1":
-                    try:
-                        scores.append(int(score))
-                    except ValueError:
-                        pass
-
-                # Показываем каждое ревью
                 text += f"**Проверка #{i}**\n"
 
                 if score and score != "-1":
                     text += f"⭐ Оценка: {score}\n"
 
                 if feedback and feedback != "none":
-                    # Обрезаем слишком длинные отзывы
                     feedback_text = feedback[:150] + ('...' if len(feedback) > 150 else '')
                     text += f"📝 Ревью: {feedback_text}\n"
 
                 text += "\n"
 
-            # Средний бал для второго режима
-            if scores:
-                average_score = sum(scores) / len(scores)
-                text += (
-                    f"📊 **СРЕДНИЙ БАЛЛ: {average_score:.2f}**\n\n"
-                )
-    else:
-        text += "⏳ Работа проверяется, обратная связь скоро появится.\n\n"
+            text += "⏳Ожидаются остальные проверки...\n\n"
+        else:
+            text += "⏳ Работа проверяется, обратная связь скоро появится.\n\n"
 
-    text += (
-        "\n"
-        "Используйте /help чтобы посмотреть другие команды"
-    )
+    text += "\nИспользуйте /help чтобы посмотреть другие команды"
 
     await message.answer(text, parse_mode="Markdown")

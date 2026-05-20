@@ -37,9 +37,33 @@ async def cmd_next2(message: Message, state: FSMContext):
         await message.answer("⚠️ Сервис временно недоступен, попробуйте позже")
         return
 
+    N = 2  # Значение потом получать от организатора
+    reviews_worksheet = sheets.reviews_worksheet
+
+    if reviews_worksheet:
+        try:
+            all_reviews = reviews_worksheet.get_all_records()
+            # Считаем сколько ревью сделал этот студент
+            reviewed_count = sum(
+                1 for review in all_reviews
+                if int(str(review.get('Reviewer_ID', 0))) == student_id
+            )
+
+            # Если студент уже проверил N работ — не даём больше
+            if reviewed_count >= N:
+                await message.answer(
+                    f"🎉 Вы проверили все необходимые работы!\n\n"
+                    f"✅ Проверено: {reviewed_count} из {N}\n\n"
+                    f"Спасибо за участие в ревью!\n"
+                    f"Используйте /check_status чтобы посмотреть статус своей работы."
+                )
+                return
+        except Exception as e:
+            logger.error(f"Ошибка подсчёта проверенных работ: {e}")
+
     # ЗНАЧЕНИЕ N ПОТОМ ПОЛУЧАТЬ ИЗ ДАННЫХ ОРГАНИЗАТОРА
     # получаем работы для проверки (n работ, где n можно настроить)
-    submissions = sheets.get_n_submissions(asker_tg_id=student_id, n=2)
+    submissions = sheets.get_n_submissions(asker_tg_id=student_id, n=N)
 
     if not submissions or len(submissions) == 0:
         await message.answer(
