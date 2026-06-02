@@ -23,19 +23,25 @@ def get_review_keyboard(submission_id: int) -> InlineKeyboardMarkup:
     ])
 
 
-@router.message(Command("next"))
+@router.message(Command("next1"))
 async def next_message(message: Message, state: FSMContext):
     """Взятие следующей работы из очереди"""
     reviewer_id = message.from_user.id
     sheets = get_sheets_service()
 
+    # ID стикера можно менять
+    loading_message = await message.answer_sticker(
+        sticker="CAACAgIAAxkBAAEEUVVqHrGEn3W-h2ewC56tOzoOhWEO_gACRAEAAs0bMAh9vsuIBiz2FjsE")
+
     if not sheets:
+        await loading_message.delete()
         await message.answer("Таблица временно недоступна, попробуйте позже 🥺")
         return
 
     submission = sheets.get_submission()
 
     if not submission:
+        await loading_message.delete()
         await message.answer("🔥 Очередь пуста, все работы проверены 🔥")
         return
 
@@ -55,6 +61,7 @@ async def next_message(message: Message, state: FSMContext):
         else "Проверено"
 
     if not sheets.add_review(submission_id=submission_id, reviewer_id=reviewer_id):
+        await loading_message.delete()
         await message.answer("Не удалось создать запись о проверке 🥺")
         return
 
@@ -62,6 +69,7 @@ async def next_message(message: Message, state: FSMContext):
     student_info = ""
     if student_id:
         student_info = f"👤 Студент: ID `{student_id}`\n"
+    await loading_message.delete()
 
     await message.answer(
         f"**НОВАЯ РАБОТА #{submission_id}**\n\n"
@@ -77,7 +85,6 @@ async def next_message(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("write_feedback"))
 async def start_write_feedback(callback: CallbackQuery, state: FSMContext):
     """Начало написания ревью"""
-
     await callback.message.answer(
         "✍️ **НАПИШИТЕ ОБРАТНУЮ СВЯЗЬ**\n\n"
         "Отправьте текст ревью для этой работы.\n"
@@ -225,6 +232,6 @@ async def cancel_review(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer("🔸 Отменено", show_alert=False)
     await callback.message.answer(
-        "🔸 Проверка отменена.\nИспользуйте /next чтобы взять другую работу.",
+        "🔸 Проверка отменена.\nИспользуйте /next1 чтобы взять другую работу.",
         parse_mode="Markdown"
     )

@@ -23,7 +23,8 @@ async def cmd_check1(message: Message):
         return
 
     #ID стикера можно менять
-    loading_message = await message.answer_sticker(sticker = "CAACAgIAAxkBAAEEUVVqHrGEn3W-h2ewC56tOzoOhWEO_gACRAEAAs0bMAh9vsuIBiz2FjsE")
+    loading_message = await message.answer_sticker(
+        sticker = "CAACAgIAAxkBAAEEUVVqHrGEn3W-h2ewC56tOzoOhWEO_gACRAEAAs0bMAh9vsuIBiz2FjsE")
 
     submission_id = sheets.get_submission_id(student_id)
     if not submission_id:

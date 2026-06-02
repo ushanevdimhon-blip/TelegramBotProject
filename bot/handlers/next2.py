@@ -33,7 +33,11 @@ async def cmd_next2(message: Message, state: FSMContext):
     student_id = message.from_user.id
     sheets = get_sheets_service()
 
+    loading_message = await message.answer_sticker(
+        sticker="CAACAgIAAxkBAAEEUVVqHrGEn3W-h2ewC56tOzoOhWEO_gACRAEAAs0bMAh9vsuIBiz2FjsE")
+
     if not sheets:
+        await loading_message.delete()
         await message.answer("⚠️ Сервис временно недоступен, попробуйте позже")
         return
 
@@ -51,6 +55,7 @@ async def cmd_next2(message: Message, state: FSMContext):
 
             # Если студент уже проверил N работ — не даём больше
             if reviewed_count >= N:
+                await loading_message.delete()
                 await message.answer(
                     f"🎉 Вы проверили все необходимые работы!\n\n"
                     f"✅ Проверено: {reviewed_count} из {N}\n\n"
@@ -66,6 +71,7 @@ async def cmd_next2(message: Message, state: FSMContext):
     submissions = sheets.get_n_submissions(asker_tg_id=student_id, n=N)
 
     if not submissions or len(submissions) == 0:
+        await loading_message.delete()
         await message.answer(
             "Все доступные работы распределены!\n\n"
             "Пока нет новых работ для проверки.\n"
@@ -95,6 +101,7 @@ async def cmd_next2(message: Message, state: FSMContext):
 
     # Если после фильтрации работ не осталось
     if not submissions or len(submissions) == 0:
+        await loading_message.delete()
         await message.answer(
             "🎉 Вы проверили все доступные работы!\n\n"
             "Пока нет новых работ для проверки."
@@ -111,6 +118,8 @@ async def cmd_next2(message: Message, state: FSMContext):
         submission_id=submission_id,
         student_id=student_id,
     )
+
+    await loading_message.delete()
 
     await message.answer(
         f"📋 **РЕЖИМ 2: PEER-TO-PEER РЕВЬЮ**\n\n"
@@ -259,7 +268,7 @@ async def cancel_peer_review(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer("❌ Отменено", show_alert=False)
     await callback.message.answer(
-        "❌ **Проверка отменена.**\n\n"
+        "🔸 **Проверка отменена.**\n\n"
         "Используйте /next2 чтобы взять работу заново.",
         parse_mode="Markdown"
     )
