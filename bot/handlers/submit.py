@@ -45,6 +45,57 @@ async def cmd_submit_start(message: Message, state: FSMContext):
 
     full_name = user.get('user_full_name', 'пользователь')
 
+    #Смотрим есть ли у пользователя уже загруженные работы
+    existing_submission_id = sheets.get_submission_id(user_id)
+
+    if existing_submission_id:
+        # Получаем данные работы
+        existing_submission = sheets.get_submission_by_id(existing_submission_id)
+
+        if existing_submission:
+            existing_link = existing_submission.get('File_link', 'не указана')
+            existing_status = existing_submission.get('Status', 'unknown')
+
+            # Если работа уже проверяется или проверена — не позволяем обновлять
+            if existing_status in ['solved', 'in_progress']:
+                status_display = {
+                    'in_progress': '🔍 На проверке',
+                    'solved': '✅ Проверено'
+                }.get(existing_status, existing_status)
+
+                await message.answer(
+                    f"⚠️ <b>Обновление недоступно!</b>\n\n"
+                    f"📝 ID: #{existing_submission_id}\n"
+                    f"🔗 Ссылка: <code>{existing_link}</code>\n"
+                    f"📊 Статус: {status_display}\n\n"
+                    f"<i>Работа уже взята на проверку или проверена.\n"
+                    f"Обновление возможно только для работ в очереди.</i>",
+                    parse_mode="HTML"
+                )
+                return
+
+            # Работа в очереди — предлагаем обновить
+            await message.answer(
+                f"📋 <b>У вас уже есть работа в системе!</b>\n\n"
+                f"📝 ID: #{existing_submission_id}\n"
+                f"🔗 Ссылка: <code>{existing_link}</code>\n"
+                f"📊 Статус: В очереди на проверку\n\n"
+                f"Вы можете <b>обновить работу</b> — загрузить новую версию.\n\n"
+                f"⚠️ <i>При обновлении:</i>\n"
+                f"• Ссылка заменится на новую\n"
+                f"• Время отправки обновится\n"
+                f"• ID работы останется прежним",
+                reply_markup=get_update_keyboard(),
+                parse_mode="HTML"
+            )
+            # Сохраняем данные для обновления
+            await state.update_data(
+                user_id=user_id,
+                existing_submission_id=existing_submission_id
+            )
+            return
+
+    #Если работы в системе нет - стандартная загрузка
     await message.answer(
         f"<b>ЗАГРУЗКА РАБОТЫ</b>\n\n"
         f"👤 {full_name}, отправьте ссылку на вашу работу.\n\n"
