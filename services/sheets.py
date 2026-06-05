@@ -323,7 +323,6 @@ class SheetsService:
             logger.error(f"Не удалось получить {n} submissions для telegram ID:{asker_tg_id}: {e}")
             return None
 
-    #возможно стоит добавить изменение времени для противодействия изменения после дд
     def update_submission(self, submission_id: int, file_link: str='', new_status: str='', n_of_rev: int=0) -> bool:
         """
         Опционально обновить status и/или file_link и/или number_of_reviewers submission по ID.
@@ -354,7 +353,10 @@ class SheetsService:
                 logger.info(f"Status для submission_id:{submission_id} обновлён")
             if file_link != '':
                 self.submissions_worksheet.update_cell(row_index, 4, file_link)
-                logger.info(f"Feedback для submission_id:{submission_id} обновлён")
+                #Автоматическое обновление времени при обновлении ссылки
+                from datetime import datetime
+                self.submissions_worksheet.update_cell(row_index, 6, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                logger.info(f"File link и datetime для submission_id:{submission_id} обновлён")
             if n_of_rev != 0:
                 self.submissions_worksheet.update_cell(row_index, 7, n_of_rev)
                 logger.info(f"n_of_rev для submission_id:{submission_id} обновлён")
