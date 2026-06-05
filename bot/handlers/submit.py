@@ -110,6 +110,33 @@ async def cmd_submit_start(message: Message, state: FSMContext):
     await state.update_data(user_id=user_id)
     await state.set_state(SubmitState.waiting_for_link)
 
+#Нажата кнопка обновления работы - обрабатываем коллбэк
+@router.callback_query(F.data == "update_work")
+async def start_update_work(callback: CallbackQuery, state: FSMContext):
+    """Начало процесса обновления работы"""
+
+    await callback.message.answer(
+        "🔄 <b>ОБНОВЛЕНИЕ РАБОТЫ</b>\n\n"
+        "Отправьте <b>новую ссылку</b> на вашу работу.\n"
+        "Старая ссылка будет заменена.\n\n"
+        "<i>Время отправки обновится автоматически.</i>",
+        parse_mode="HTML"
+    )
+
+    await state.set_state(SubmitState.waiting_for_new_link)
+    await callback.answer()
+
+#Пользователь отменил обновление работы
+@router.callback_query(F.data == "cancel_update")
+async def cancel_update(callback: CallbackQuery, state: FSMContext):
+    """Отмена обновления"""
+
+    await state.clear()
+    try:
+        await callback.message.edit_text("❌ Обновление отменено.")
+    except:
+        pass
+    await callback.answer()
 @router.message(SubmitState.waiting_for_link, F.text)
 async def handle_work_link(message: Message, state: FSMContext):
     """Получение ссылки, валидация и сохранение в таблицу"""
