@@ -137,6 +137,52 @@ async def cancel_update(callback: CallbackQuery, state: FSMContext):
     except:
         pass
     await callback.answer()
+
+#Обработка новой ссылки
+@router.message(SubmitState.waiting_for_new_link, F.text)
+async def handle_new_link(message: Message, state: FSMContext):
+    """Получили новую ссылку для обновления работы"""
+
+    new_file_link = message.text.strip()
+    data = await state.get_data()
+    user_id = data.get('user_id')
+    existing_id = data.get('existing_submission_id')
+
+    # TODO: проверка ссылки на валидность
+
+    sheets = get_sheets_service()
+    if not sheets:
+        await message.answer("Сервис таблиц временно недоступен.")
+        await state.clear()
+        return
+
+    # ОБНОВЛЯЕМ СУЩЕСТВУЮЩУЮ РАБОТУ
+    # При изменении file_link автоматически обновится Created_at
+    result = sheets.update_submission(
+        submission_id=existing_id,
+        file_link=new_file_link,
+        new_status='not_solved'  # Явно сбрасываем статус (на всякий случай)
+    )
+
+    if result:
+        await message.answer(
+            f"✅ <b>Работа успешно обновлена!</b>\n\n"
+            f"📝 ID: #{existing_id}\n"
+            f"🔗 Новая ссылка: <code>{new_file_link}</code>\n"
+            f"📊 Статус: ⏳ В очереди на проверку\n",
+            parse_mode="HTML"
+        )
+        logger.info(f"Студент {user_id} обновил работу #{existing_id}")
+    else:
+        await message.answer(
+            "❌ Не удалось обновить работу.\n"
+            "Попробуйте /submit ещё раз."
+        )
+        logger.error(f"Ошибка обновления работы #{existing_id} для пользователя {user_id}")
+
+    await state.clear()
+
+#Первичная загрузка работы
 @router.message(SubmitState.waiting_for_link, F.text)
 async def handle_work_link(message: Message, state: FSMContext):
     """Получение ссылки, валидация и сохранение в таблицу"""
