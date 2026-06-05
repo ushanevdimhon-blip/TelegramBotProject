@@ -4,6 +4,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from services.sheets import get_sheets_service
+from services.whisper import get_whisper_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -145,11 +146,22 @@ async def start_peer_review(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.message(PeerReviewState.waiting_for_feedback, F.text)
+@router.message(PeerReviewState.waiting_for_feedback, F.text | F.voice)
 async def handle_peer_feedback(message: Message, state: FSMContext):
     """Получили feedback - сохранили - просим оценку"""
 
-    feedback = message.text.strip()
+    if message.voice:
+        whisper = get_whisper_service()
+
+        if not whisper:
+            await message.answer("Распознавание голосовых сообщений"
+                                 " временно недоступно 🥺, вы можете отправить текст")
+            return
+        feedback = await whisper.extract(message.voice.file_id)
+
+    if message.text:
+        feedback = message.text.strip()
+
     data = await state.get_data()
     submission_id = data.get('submission_id')
     reviewer_id = data.get('student_id')  # В peer-to-peer ревьюер = студент
