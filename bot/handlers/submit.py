@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -10,7 +10,15 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 class SubmitState(StatesGroup):
-    waiting_for_link = State()
+    waiting_for_link = State() #Первичная загрузка - сюда попадет пользователь при первой отправке
+    waiting_for_new_link = State()  # Ожидание новой ссылки (обновление)
+
+def get_update_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура для обновления существующей работы"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 Обновить работу", callback_data="update_work")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_update")]
+    ])
 
 @router.message(Command("submit"))
 async def cmd_submit_start(message: Message, state: FSMContext):
