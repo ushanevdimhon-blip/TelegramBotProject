@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -10,7 +10,15 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 class SubmitState(StatesGroup):
-    waiting_for_link = State()
+    waiting_for_link = State() #Первичная загрузка - сюда попадет пользователь при первой отправке
+    waiting_for_new_link = State()  # Ожидание новой ссылки (обновление)
+
+def get_update_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура для обновления существующей работы"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 Обновить работу", callback_data="update_work")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_update")]
+    ])
 
 @router.message(Command("submit"))
 async def cmd_submit_start(message: Message, state: FSMContext):
@@ -37,6 +45,57 @@ async def cmd_submit_start(message: Message, state: FSMContext):
 
     full_name = user.get('user_full_name', 'пользователь')
 
+    #Смотрим есть ли у пользователя уже загруженные работы
+    existing_submission_id = sheets.get_submission_id(user_id)
+
+    if existing_submission_id:
+        # Получаем данные работы
+        existing_submission = sheets.get_submission_by_id(existing_submission_id)
+
+        if existing_submission:
+            existing_link = existing_submission.get('File_link', 'не указана')
+            existing_status = existing_submission.get('Status', 'unknown')
+
+            # Если работа уже проверяется или проверена — не позволяем обновлять
+            if existing_status in ['solved', 'in_progress']:
+                status_display = {
+                    'in_progress': '🔍 На проверке',
+                    'solved': '✅ Проверено'
+                }.get(existing_status, existing_status)
+
+                await message.answer(
+                    f"⚠️ <b>Обновление недоступно!</b>\n\n"
+                    f"📝 ID: #{existing_submission_id}\n"
+                    f"🔗 Ссылка: <code>{existing_link}</code>\n"
+                    f"📊 Статус: {status_display}\n\n"
+                    f"<i>Работа уже взята на проверку или проверена.\n"
+                    f"Обновление возможно только для работ в очереди.</i>",
+                    parse_mode="HTML"
+                )
+                return
+
+            # Работа в очереди — предлагаем обновить
+            await message.answer(
+                f"📋 <b>У вас уже есть работа в системе!</b>\n\n"
+                f"📝 ID: #{existing_submission_id}\n"
+                f"🔗 Ссылка: <code>{existing_link}</code>\n"
+                f"📊 Статус: В очереди на проверку\n\n"
+                f"Вы можете <b>обновить работу</b> — загрузить новую версию.\n\n"
+                f"⚠️ <i>При обновлении:</i>\n"
+                f"• Ссылка заменится на новую\n"
+                f"• Время отправки обновится\n"
+                f"• ID работы останется прежним",
+                reply_markup=get_update_keyboard(),
+                parse_mode="HTML"
+            )
+            # Сохраняем данные для обновления
+            await state.update_data(
+                user_id=user_id,
+                existing_submission_id=existing_submission_id
+            )
+            return
+
+    #Если работы в системе нет - стандартная загрузка
     await message.answer(
         f"<b>ЗАГРУЗКА РАБОТЫ</b>\n\n"
         f"👤 {full_name}, отправьте ссылку на вашу работу.\n\n"
@@ -51,6 +110,79 @@ async def cmd_submit_start(message: Message, state: FSMContext):
     await state.update_data(user_id=user_id)
     await state.set_state(SubmitState.waiting_for_link)
 
+#Нажата кнопка обновления работы - обрабатываем коллбэк
+@router.callback_query(F.data == "update_work")
+async def start_update_work(callback: CallbackQuery, state: FSMContext):
+    """Начало процесса обновления работы"""
+
+    await callback.message.answer(
+        "🔄 <b>ОБНОВЛЕНИЕ РАБОТЫ</b>\n\n"
+        "Отправьте <b>новую ссылку</b> на вашу работу.\n"
+        "Старая ссылка будет заменена.\n\n"
+        "<i>Время отправки обновится автоматически.</i>",
+        parse_mode="HTML"
+    )
+
+    await state.set_state(SubmitState.waiting_for_new_link)
+    await callback.answer()
+
+#Пользователь отменил обновление работы
+@router.callback_query(F.data == "cancel_update")
+async def cancel_update(callback: CallbackQuery, state: FSMContext):
+    """Отмена обновления"""
+
+    await state.clear()
+    try:
+        await callback.message.edit_text("❌ Обновление отменено.")
+    except:
+        pass
+    await callback.answer()
+
+#Обработка новой ссылки
+@router.message(SubmitState.waiting_for_new_link, F.text)
+async def handle_new_link(message: Message, state: FSMContext):
+    """Получили новую ссылку для обновления работы"""
+
+    new_file_link = message.text.strip()
+    data = await state.get_data()
+    user_id = data.get('user_id')
+    existing_id = data.get('existing_submission_id')
+
+    # TODO: проверка ссылки на валидность
+
+    sheets = get_sheets_service()
+    if not sheets:
+        await message.answer("Сервис таблиц временно недоступен.")
+        await state.clear()
+        return
+
+    # ОБНОВЛЯЕМ СУЩЕСТВУЮЩУЮ РАБОТУ
+    # При изменении file_link автоматически обновится Created_at
+    result = sheets.update_submission(
+        submission_id=existing_id,
+        file_link=new_file_link,
+        new_status='not_solved'  # Явно сбрасываем статус (на всякий случай)
+    )
+
+    if result:
+        await message.answer(
+            f"✅ <b>Работа успешно обновлена!</b>\n\n"
+            f"📝 ID: #{existing_id}\n"
+            f"🔗 Новая ссылка: <code>{new_file_link}</code>\n"
+            f"📊 Статус: ⏳ В очереди на проверку\n",
+            parse_mode="HTML"
+        )
+        logger.info(f"Студент {user_id} обновил работу #{existing_id}")
+    else:
+        await message.answer(
+            "❌ Не удалось обновить работу.\n"
+            "Попробуйте /submit ещё раз."
+        )
+        logger.error(f"Ошибка обновления работы #{existing_id} для пользователя {user_id}")
+
+    await state.clear()
+
+#Первичная загрузка работы
 @router.message(SubmitState.waiting_for_link, F.text)
 async def handle_work_link(message: Message, state: FSMContext):
     """Получение ссылки, валидация и сохранение в таблицу"""
