@@ -22,8 +22,13 @@ async def cmd_check1(message: Message):
         await message.answer("⚠️ Сервис временно недоступен, попробуйте позже")
         return
 
+    #ID стикера можно менять
+    loading_message = await message.answer_sticker(
+        sticker = "CAACAgIAAxkBAAEEUVVqHrGEn3W-h2ewC56tOzoOhWEO_gACRAEAAs0bMAh9vsuIBiz2FjsE")
+
     submission_id = sheets.get_submission_id(student_id)
     if not submission_id:
+        await loading_message.delete() #Эту команду использовать при каждом ответе - чтобы сообщение о загрузке удалялось
         await message.answer(
             "У вас ещё нет работ в системе.\n\n"
             "Используйте /submit чтобы загрузить работу."
@@ -32,6 +37,7 @@ async def cmd_check1(message: Message):
 
     submission = sheets.get_submission_by_id(submission_id)
     if not submission:
+        await loading_message.delete()
         await message.answer("❌ Не удалось получить информацию о работе")
         return
 
@@ -122,4 +128,7 @@ async def cmd_check1(message: Message):
 
     text += "\nИспользуйте /help чтобы посмотреть другие команды"
 
+    await loading_message.delete()
+
     await message.answer(text, parse_mode="Markdown")
+
