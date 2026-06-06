@@ -125,6 +125,33 @@ class SheetsService:
         else:
             return 1
 
+    def clear(self) -> bool:
+        """
+        удаляет значения из всех листов таблицы
+        :return: удалось/не удалось очистить таблицу
+        """
+        if self.users_worksheet is None:
+            logger.error(f"self.users_worksheet is None")
+            return False
+        if self.reviews_worksheet is None:
+            logger.error(f"self.reviews_worksheet is None")
+            return False
+        if self.submissions_worksheet is None:
+            logger.error(f"self.submissions_worksheet is None")
+            return False
+        try:
+            users_rows = self.users_worksheet.get_all_values()
+            reviews_rows = self.reviews_worksheet.get_all_values()
+            submissions_rows = self.submissions_worksheet.get_all_values()
+
+            self.users_worksheet.delete_rows(2,len(users_rows))
+            self.submissions_worksheet.delete_rows(2,len(submissions_rows))
+            self.reviews_worksheet.delete_rows(2, len(reviews_rows))
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка очистки таблицы: {e}")
+            return False
+
     #TODO: ?возможно надо добавить разброс оценок
 
     def get_aggregated_result(self, telegram_id: int) -> list | None:
@@ -315,7 +342,7 @@ class SheetsService:
                     break
                 number_of_reviewers = int(str(record.get("Number_of_reviewers")))
                 student_id = int(str(record.get("Student_ID")))
-                if number_of_reviewers == n or student_id == asker_tg_id:
+                if number_of_reviewers >= n or student_id == asker_tg_id:
                     continue
                 submissions.append(record)
             return submissions
