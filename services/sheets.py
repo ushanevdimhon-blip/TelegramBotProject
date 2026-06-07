@@ -350,7 +350,7 @@ class SheetsService:
             logger.error(f"Не удалось получить {n} submissions для telegram ID:{asker_tg_id}: {e}")
             return None
 
-    def update_submission(self, submission_id: int, file_link: str='', new_status: str='', n_of_rev: int=0) -> bool:
+    def update_submission(self, submission_id: int, file_link: str='', new_status: str='', n_of_rev: int=-1) -> bool:
         """
         Опционально обновить status и/или file_link и/или number_of_reviewers submission по ID.
         Для обновления чего-то одного необходимо явно указать, что именно(file_link=...).
@@ -384,9 +384,9 @@ class SheetsService:
                 from datetime import datetime
                 self.submissions_worksheet.update_cell(row_index, 6, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                 logger.info(f"File link и datetime для submission_id:{submission_id} обновлён")
-            if n_of_rev != 0:
+            if n_of_rev != -1:
                 self.submissions_worksheet.update_cell(row_index, 7, n_of_rev)
-                logger.info(f"n_of_rev для submission_id:{submission_id} обновлён")
+                logger.info(f"n_of_rev для submission_id:{submission_id} обновлён {n_of_rev}")
             return True
         except Exception as e:
             logger.error(f"Ошибка обновления submission для submission_id:{submission_id}: {e}")
@@ -520,8 +520,9 @@ class SheetsService:
             cell = self.reviews_worksheet.find(str(review_id), in_column=1)
             subm_id = self.reviews_worksheet.cell(cell.row, 2).value
             subm = self.get_submission_by_id(int(subm_id))
-            self.update_submission(int(subm_id), n_of_rev=(subm["Number_of_reviewers"]) - 1)
+            self.update_submission(int(subm_id), n_of_rev=(int(subm["Number_of_reviewers"])) - 1)
             self.reviews_worksheet.delete_rows(cell.row)
+            logger.info(f"ревью {review_id} удалено, subm_id:{subm_id} n_of_rev: {int(subm["Number_of_reviewers"]) - 1}")
             return True
         except Exception as e:
             logger.error(f"Ошибка удаления review для review_id:{review_id}: {e}")
